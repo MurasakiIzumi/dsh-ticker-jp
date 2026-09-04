@@ -2,6 +2,19 @@
 
 本项目的所有值得一提的变更都会记录在此文件。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [0.3.1] - 2026-09-04
+
+### Changed
+
+- **Host 抓取并发化**：`fetchQuotes` 由逐 symbol 串行改为有界并发（上限 5 路）抓取，保留逐 symbol 5s 超时与错误隔离，返回顺序与原 watch list 一致——最坏一轮耗时由 15×5s≈75s 降至约 3×5s≈15s，正常行情下 2s 内即可完成一轮。
+- **文件头注释同步**：四个代码文件头注释补充超时/防重叠说明，动态形态文件另注明其运行时注入依据（动态 client 的 `inject: ['timer']` 声明原因、动态 host 无需 `inject` 声明的依据），防止后续误判回归。
+
+### Fixed
+
+- **每标的请求 5s 超时**：`fetchOne` 改用 `AbortSignal.timeout(5000)`——上游（Yahoo）挂起时该标的最多等 5s 即被放弃并返回可读错误（`fetch timed out after 5s`），不再无限挂起；超时只淘汰该标的，不拖垮整批。
+- **Client 轮询防重叠**：上一轮请求仍在飞行时跳过本轮 tick（in-flight 标志），慢响应不再与下一轮请求堆积。
+- **错误文案统一**：整批全失败时的兜底文案在两形态间统一为 `no quotes fetched`（此前动态形态 `host.js` 为大写开头）。
+
 ## [0.3.0] - 2026-09-04
 
 ### Added

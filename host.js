@@ -11,10 +11,19 @@
 // failures never abort the batch — the RPC answers { ok:true, items } for
 // partial success and { ok:false, error } only when nothing could be fetched.
 // Display names come from the Yahoo meta (longName -> shortName), falling back
-// to the raw code.
+// to the raw code. Each Yahoo fetch is aborted after 5s so a hung upstream can
+// never stall a poll cycle. Symbols are fetched with bounded concurrency, so
+// the whole watch list completes in a handful of timeout windows instead of
+// one per symbol.
+//
+// Dynamic-host environment: `harness` is the host-half closure symbol and the
+// plugin body only uses ctx.effect, so the returned plugin needs no `inject`
+// declaration.
 
 const DEFAULTS = ['1306.T', '^N225']
 const MAX_SYMBOLS = 15
+const MAX_CONCURRENCY = 5
+const FETCH_TIMEOUT_MS = 5000
 const RE_SYMBOL = /^[A-Z0-9^][A-Z0-9.\-]*$/
 
 function normalizeSymbol(raw) {
@@ -39,7 +48,7 @@ function collectSyms(args) {
 async function fetchOne(symbol) {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`
   try {
-    const res = await fetch(url)
+    const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     const meta = data?.chart?.result?.[0]?.meta
@@ -50,8 +59,30 @@ async function fetchOne(symbol) {
     const name = meta.longName || meta.shortName || symbol
     return { ok: true, item: { name, code: symbol, price, changePct } }
   } catch (e) {
-    return { ok: false, error: `[${symbol}] ${String((e && e.message) || e)}` }
+    const reason = (e && e.name === 'TimeoutError')
+      ? 'fetch timed out after 5s'
+      : String((e && e.message) || e)
+    return { ok: false, error: `[${symbol}] ${reason}` }
   }
+}
+
+async function fetchQuotes(symbols) {
+  const items = []
+  const errors = []
+  let cursor = 0
+  async function worker() {
+    while (cursor < symbols.length) {
+      const idx = cursor++
+      const result = await fetchOne(symbols[idx])
+      if (result.ok) items[idx] = result.item
+      else errors.push(result.error)
+    }
+  }
+  const poolSize = Math.min(MAX_CONCURRENCY, symbols.length)
+  const workers = []
+  for (let i = 0; i < poolSize; i++) workers.push(worker())
+  await Promise.all(workers)
+  return { items: items.filter(Boolean), errors }
 }
 
 return {
@@ -59,15 +90,9 @@ return {
     ctx.effect(() =>
       harness.handle('getQuotes', async (args) => {
         const symbols = collectSyms(args)
-        const items = []
-        const errors = []
-        for (const sym of symbols) {
-          const result = await fetchOne(sym)
-          if (result.ok) items.push(result.item)
-          else errors.push(result.error)
-        }
+        const { items, errors } = await fetchQuotes(symbols)
         if (items.length === 0) {
-          const errorMsg = errors.length ? errors.join('; ') : 'No quotes fetched'
+          const errorMsg = errors.length ? errors.join('; ') : 'no quotes fetched'
           return { ok: false, error: errorMsg }
         }
         return { ok: true, items }

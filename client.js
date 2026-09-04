@@ -2,7 +2,15 @@
 //
 // Paste this whole file into the Client `code.client` of `cordis_define` to
 // load the plugin dynamically. It injects a draggable, collapsible floating
-// quote window into `shell.overlay` and polls the `getQuotes` RPC every 5s.
+// quote window into `shell.overlay` and polls the `getQuotes` RPC every 5s;
+// a poll already in flight is skipped, so a slow response never overlaps the
+// next one.
+//
+// Dynamic-client environment: React, styles, host and console arrive as fixed
+// closure symbols; ctx.get('slots') is an optional soft lookup, so none of
+// those needs an `inject` entry. ctx.interval is a timer verb, which the
+// client-runner guard only exposes after declaring 'timer' below — that is
+// the plugin's one hard dependency.
 // The watch list is user-editable via the gear button: each entry is a code
 // plus an optional display alias (editable inline), persisted when
 // `localStorage` is available and otherwise kept for the page session.
@@ -185,8 +193,11 @@ return {
 
       React.useEffect(() => {
         let alive = true
+        let busy = false
         const codes = syms.map((e) => e.code)
         const load = async () => {
+          if (busy) return
+          busy = true
           try {
             const data = await host.call('getQuotes', { syms: codes })
             if (!alive) return
@@ -194,6 +205,8 @@ return {
             else setErr((data && data.error) || '获取失败')
           } catch (e) {
             if (alive) setErr(String((e && e.message) || e))
+          } finally {
+            busy = false
           }
         }
         load()

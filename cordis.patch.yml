@@ -1,0 +1,8 @@
+# dsh-ticker-jp — bundle patch
+#
+# Inserts the plugin as a single loader entry: the Host entry (lib/index.js)
+# registers the route /dsh-ticker-jp/quotes; the client bundle (lib/client.js)
+# renders the floating window and polls that route.
+- insert:
+    - id: ticker-jp
+      name: dsh-ticker-jp

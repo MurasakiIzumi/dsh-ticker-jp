@@ -46,13 +46,13 @@
 
 ## 🚀 安装
 
-在仓库目录下作为常驻 bundle 安装，随 DSH 启动自动加载：
+作为常驻 bundle 安装，随 DSH 启动自动加载、重启不消失：
 
 ```bash
-dsh plugin --profile web add .
+dsh plugin --profile web add github:MurasakiIzumi/dsh-ticker-jp
 ```
 
-（发布到 GitHub 后可替换为 `github:<你的用户名>/dsh-ticker-jp`。）装完重启 DSH（或选择「立即重启」），页面右上角即出现悬浮行情窗。
+装完重启 DSH（或选择「立即重启」），页面右上角即出现悬浮行情窗。
 
 > 结构遵循社区 `dsh-plugin` 约定：`dsh.bundle.patch` 指向 `cordis.patch.yml`，Host 入口 `lib/index.js` 注册同源路由 `/dsh-ticker-jp/quotes`（内部以原生 `fetch` 请求 Yahoo Finance），Client bundle `lib/client.js` 渲染悬浮窗并每 5 秒轮询该路由。
 

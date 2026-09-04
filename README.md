@@ -14,7 +14,7 @@
 ## 📸 预览
 
 <p align="center">
-  <img src="./assets/screenshot.png" alt="dsh-ticker-jp 悬浮行情" width="360">
+  <img src="./assets/screenshot.png" alt="dsh-ticker-jp 悬浮行情" width="720">
   <img src="./assets/screenshot2.png" alt="dsh-ticker-jp 自选行情设置" width="360">
 </p>
 

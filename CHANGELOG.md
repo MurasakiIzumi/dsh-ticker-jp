@@ -2,6 +2,16 @@
 
 本项目的所有值得一提的变更都会记录在此文件。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [0.3.2] - 2026-09-04
+
+### Fixed
+
+- **动态形态 Host 半抓取不可用（fork 遗留严重问题）**：动态 Host 半运行在 `node:vm` 沙箱中，原生 `fetch` 被沙箱 trap 禁用且无 `AbortSignal`，此前 `host.js` 的抓取必然失败、`getQuotes` 恒返回错误。现改为经 cordis web 服务抓取：`ctx.get('web')` 软读取（免 `inject` 声明）+ `web.fetch({ url })`，并以 `ctx.timeout` 竞速实现与 bundle 相同的 5s 单标的超时（`ctx.timeout` 属 timer 动词，故插件声明 `inject: ['timer']`）。错误文案（`fetch timed out after 5s`）、错误隔离、并发抓取（上限 5 路）与顺序保持均与 bundle 形态一致。
+
+### Changed
+
+- **动态形态 `host.js` 与 bundle `lib/index.js` 不再逐字等价**：因沙箱禁原生 `fetch`，动态 Host 半改走 web 服务（bundle Host 保持原生 `fetch` 不动）；两者仅保证对外 RPC 契约（`getQuotes` → `{ ok, items }` / `{ ok:false, error }`）一致，文件头注释已说明差异原因。
+
 ## [0.3.1] - 2026-09-04
 
 ### Changed

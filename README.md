@@ -74,7 +74,7 @@ dsh plugin --profile web add github:MurasakiIzumi/dsh-ticker-jp
 dsh-ticker-jp/
 ├── lib/index.js    # Host 包入口：注册 /dsh-ticker-jp/quotes 路由
 ├── lib/client.js   # Client bundle：悬浮窗 UI + 5s 轮询 + 自选/别名
-├── host.js         # 动态插件形式的 Host 半区（可选，与 lib/index.js 逻辑等价）
+├── host.js         # 动态插件 Host 半区（可选；沙箱内经 ctx.web 抓取，RPC 契约与 lib/index.js 一致）
 ├── client.js       # 动态插件形式的 Client 半区（可选，与 lib/client.js 逻辑等价）
 ├── package.json    # 包清单（dsh bundle + client 声明）
 ├── cordis.patch.yml  # bundle patch：插入插件行
@@ -103,7 +103,7 @@ dsh-ticker-jp/
 2. `cordis_run` 激活；客户端首次运行需要在审批卡片里点「允许」。
 3. 刷新页面后即出现悬浮行情窗。
 
-> 两个文件里的代码就是 `cordis_define` 的 `code.host` / `code.client` 函数体，直接整段复制即可；与 bundle 形态（`lib/`）功能等价。
+> 两个文件里的代码就是 `cordis_define` 的 `code.host` / `code.client` 函数体，直接整段复制即可；对外功能与 bundle 形态（`lib/`）等价——唯一差异是动态 Host 半运行于受限沙箱（原生 `fetch` 被禁用），抓取经 `ctx.web` 完成，而 bundle 仍用原生 `fetch`，两者的 RPC 契约一致。
 
 ## 📄 License
 

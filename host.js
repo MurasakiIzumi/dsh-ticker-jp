@@ -11,14 +11,17 @@
 // failures never abort the batch — the RPC answers { ok:true, items } for
 // partial success and { ok:false, error } only when nothing could be fetched.
 // Display names come from the Yahoo meta (longName -> shortName), falling back
-// to the raw code. Each Yahoo fetch is aborted after 5s so a hung upstream can
-// never stall a poll cycle. Symbols are fetched with bounded concurrency, so
-// the whole watch list completes in a handful of timeout windows instead of
-// one per symbol.
+// to the raw code.
 //
-// Dynamic-host environment: `harness` is the host-half closure symbol and the
-// plugin body only uses ctx.effect, so the returned plugin needs no `inject`
-// declaration.
+// Why this file differs from the bundle Host (lib/index.js): a dynamic host
+// half runs inside a node:vm sandbox that traps the native `fetch` (and has no
+// `AbortSignal`), so requests go through the cordis web service instead —
+// `ctx.get('web')` is an optional soft lookup (no `inject` entry needed). Each
+// call races the web fetch against ctx.timeout for the same 5s cap the bundle
+// uses; ctx.timeout is a timer verb, so `inject: ['timer']` is declared on the
+// returned plugin — its one hard dependency. Symbols are fetched with bounded
+// concurrency, so the whole watch list completes in a handful of timeout
+// windows instead of one per symbol.
 
 const DEFAULTS = ['1306.T', '^N225']
 const MAX_SYMBOLS = 15
@@ -45,12 +48,32 @@ function collectSyms(args) {
   return out.length ? out : DEFAULTS
 }
 
-async function fetchOne(symbol) {
+// One Yahoo quote via ctx.web. `web` is the cordis web service (result shape:
+// { statusCode, body: { content } }) and `ctx` supplies the timeout race.
+// Always resolves { ok, item } or { ok:false, error } — never throws.
+async function fetchOne(symbol, web, ctx) {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
+    const timeoutError = new Error('fetch timed out after 5s')
+    timeoutError.name = 'TimeoutError'
+    // Race the web fetch against the 5s cap. Both arms settle into a tagged
+    // result (never a raw rejection), so the losing promise can never surface
+    // an unhandled rejection once the race has settled.
+    const result = await Promise.race([
+      web.fetch({ url }).then(
+        (value) => ({ ok: true, value }),
+        (error) => ({ ok: false, error })
+      ),
+      ctx.timeout(FETCH_TIMEOUT_MS).then(
+        () => ({ ok: false, error: timeoutError }),
+        () => ({ ok: false, error: timeoutError })
+      )
+    ])
+    if (!result.ok) throw result.error
+    const res = result.value
+    if (!res || typeof res.statusCode !== 'number') throw new Error('no valid web response')
+    if (res.statusCode < 200 || res.statusCode >= 300) throw new Error(`HTTP ${res.statusCode}`)
+    const data = JSON.parse((res.body && res.body.content) || '')
     const meta = data?.chart?.result?.[0]?.meta
     if (!meta) throw new Error('no meta in response')
     const price = meta.regularMarketPrice
@@ -66,14 +89,14 @@ async function fetchOne(symbol) {
   }
 }
 
-async function fetchQuotes(symbols) {
+async function fetchQuotes(symbols, web, ctx) {
   const items = []
   const errors = []
   let cursor = 0
   async function worker() {
     while (cursor < symbols.length) {
       const idx = cursor++
-      const result = await fetchOne(symbols[idx])
+      const result = await fetchOne(symbols[idx], web, ctx)
       if (result.ok) items[idx] = result.item
       else errors.push(result.error)
     }
@@ -86,11 +109,14 @@ async function fetchQuotes(symbols) {
 }
 
 return {
+  inject: ['timer'],
   apply(ctx) {
     ctx.effect(() =>
       harness.handle('getQuotes', async (args) => {
+        const web = ctx.get('web')
+        if (web === undefined) return { ok: false, error: 'web service unavailable' }
         const symbols = collectSyms(args)
-        const { items, errors } = await fetchQuotes(symbols)
+        const { items, errors } = await fetchQuotes(symbols, web, ctx)
         if (items.length === 0) {
           const errorMsg = errors.length ? errors.join('; ') : 'no quotes fetched'
           return { ok: false, error: errorMsg }

@@ -2,29 +2,56 @@
 //
 // Paste this whole file into the Client `code.client` of `cordis_define` to
 // load the plugin dynamically. It injects a draggable, collapsible floating
-// quote window into `shell.overlay` and polls the `getQuotes` RPC every 5s;
-// a poll already in flight is skipped, so a slow response never overlaps the
-// next one.
+// quote window into `shell.overlay` and polls the `getQuotes` RPC — every 5s
+// while at least one watched market is trading, otherwise only a 60s check
+// that resumes 5s polls once a market opens. A poll already in flight is
+// skipped, so a slow response never overlaps the next one.
 //
 // Dynamic-client environment: React, styles, host and console arrive as fixed
 // closure symbols; ctx.get('slots') is an optional soft lookup, so none of
-// those needs an `inject` entry. ctx.interval is a timer verb, which the
+// those needs an `inject` entry. ctx.timeout is a timer verb, which the
 // client-runner guard only exposes after declaring 'timer' below — that is
 // the plugin's one hard dependency.
 // The watch list is user-editable via the gear button: each entry is a code
 // plus an optional display alias (editable inline), persisted when
 // `localStorage` is available and otherwise kept for the page session.
+//
+// Window position and the up/down palette are persisted too (keys
+// `dsh-ticker-jp:pos` / `dsh-ticker-jp:palette`; jp = red-up/green-down,
+// us = green-up/red-down); positions are clamped to the viewport on read.
+// Successful items echo the Yahoo exchange timezone: while every watched
+// market is closed (weekend + approximate local hours only — lunch breaks and
+// holidays are not modelled, unknown timezones count as open) the poll pauses
+// and one snapshot is still fetched when the window is created or the
+// watchlist changes.
 
-const UP = '#ff3b30'
-const DOWN = '#00e08a'
 const NEUTRAL = 'var(--dsw-alias-label-primary)'
 
+const PALETTES = {
+  jp: { up: '#ff3b30', down: '#00e08a' },
+  us: { up: '#00e08a', down: '#ff3b30' },
+}
+
 const STORAGE_KEY = 'dsh-ticker-jp:syms'
+const POS_KEY = 'dsh-ticker-jp:pos'
+const PALETTE_KEY = 'dsh-ticker-jp:palette'
+
 const DEFAULTS = ['1306.T', '^N225']
 
 const DISPLAY = { '1306.T': 'TOPIX ETF', '^N225': '日経225' }
 
 const RE_SYMBOL = /^[A-Z0-9^][A-Z0-9.\-]*$/
+
+const MARKET_HOURS = {
+  'Asia/Tokyo': { open: 9 * 60, close: 15 * 60 + 30 },
+  'Asia/Hong_Kong': { open: 9 * 60 + 30, close: 16 * 60 },
+  'Asia/Shanghai': { open: 9 * 60 + 30, close: 15 * 60 },
+  'America/New_York': { open: 9 * 60 + 30, close: 16 * 60 },
+}
+const ACTIVE_POLL_MS = 5000
+const IDLE_CHECK_MS = 60000
+const WIDGET_WIDTH = 232
+const MIN_VISIBLE = 40
 
 // "9984" -> "9984.T"; returns "" for empty / invalid input.
 function normalizeSymbol(raw) {
@@ -90,6 +117,75 @@ function writeSyms(list) {
   } catch (e) { /* ignore quota / privacy errors */ }
 }
 
+function readPos() {
+  const fallback = { x: 16, y: 16 }
+  let parsed = null
+  if (canStore()) {
+    try {
+      const raw = localStorage.getItem(POS_KEY)
+      if (raw) parsed = JSON.parse(raw)
+    } catch (e) { parsed = null }
+  }
+  const rawPos = (parsed && typeof parsed === 'object' && typeof parsed.x === 'number' && typeof parsed.y === 'number')
+    ? parsed
+    : fallback
+  const maxX = Math.max(0, window.innerWidth - WIDGET_WIDTH - MIN_VISIBLE)
+  const maxY = Math.max(0, window.innerHeight - MIN_VISIBLE)
+  return {
+    x: Math.min(Math.max(0, Math.round(rawPos.x)), maxX),
+    y: Math.min(Math.max(0, Math.round(rawPos.y)), maxY),
+  }
+}
+
+function writePos(pos) {
+  if (!canStore()) return
+  try {
+    localStorage.setItem(POS_KEY, JSON.stringify(pos))
+  } catch (e) { /* ignore quota / privacy errors */ }
+}
+
+function readPalette() {
+  let value = null
+  if (canStore()) {
+    try {
+      value = localStorage.getItem(PALETTE_KEY)
+    } catch (e) { value = null }
+  }
+  return (value === 'jp' || value === 'us') ? value : 'jp'
+}
+
+function writePalette(name) {
+  if (!canStore()) return
+  try {
+    localStorage.setItem(PALETTE_KEY, name)
+  } catch (e) { /* ignore quota / privacy errors */ }
+}
+
+function zoneNow(tz, date) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(date)
+  const pick = (type) => {
+    const p = parts.find((x) => x.type === type)
+    return p ? p.value : ''
+  }
+  const hour = Number(pick('hour')) || 0
+  const minute = Number(pick('minute')) || 0
+  return { weekday: pick('weekday'), minutes: hour * 60 + minute }
+}
+
+function anyMarketOpen(tzs, date = new Date()) {
+  if (!tzs.length) return true
+  for (const tz of tzs) {
+    const hours = MARKET_HOURS[tz]
+    if (!hours) return true
+    const local = zoneNow(tz, date)
+    if (local.weekday === 'Sat' || local.weekday === 'Sun') continue
+    if (local.minutes >= hours.open && local.minutes < hours.close) return true
+  }
+  return false
+}
+
 const fmt = (n) => {
   const v = Number(n)
   return (n == null || !Number.isFinite(v)) ? '--' : v.toFixed(2)
@@ -137,9 +233,10 @@ return {
 `))
 
     // One quote row; `name` is already resolved (alias > builtin > Yahoo).
-    function Row(item, name) {
+    // `up`/`down` are the palette colors for the current preference.
+    function Row(item, name, up, down) {
       const c = (item && typeof item.changePct === 'number')
-        ? (item.changePct > 0 ? UP : item.changePct < 0 ? DOWN : NEUTRAL)
+        ? (item.changePct > 0 ? up : item.changePct < 0 ? down : NEUTRAL)
         : NEUTRAL
       const label = name || (item && item.name) || '--'
       return React.createElement('div', { className: 'shq-row', key: item.code },
@@ -152,12 +249,17 @@ return {
     function StockWidget() {
       const [items, setItems] = React.useState(null)
       const [err, setErr] = React.useState(null)
-      const [pos, setPos] = React.useState({ x: 16, y: 16 })
+      const [pos, setPos] = React.useState(readPos)
       const [collapsed, setCollapsed] = React.useState(false)
       const [editing, setEditing] = React.useState(false)
       const [syms, setSyms] = React.useState(readSyms)
       const [draft, setDraft] = React.useState('')
+      const [paletteName, setPaletteName] = React.useState(readPalette)
       const drag = React.useRef(null)
+      const posRef = React.useRef(null)
+      const tzsRef = React.useRef([])
+      posRef.current = pos
+      const palette = PALETTES[paletteName] || PALETTES.jp
 
       const commitSyms = (next) => {
         const out = []
@@ -191,27 +293,51 @@ return {
 
       const codesKey = syms.map((e) => e.code).join(',')
 
+      // Polling scheduler: fetch one snapshot immediately (window creation or
+      // watchlist change), then poll every ACTIVE_POLL_MS while any watched
+      // market is in its local trading window; while all are closed, stop
+      // polling and only re-check at IDLE_CHECK_MS, resuming 5s polls the
+      // moment some market opens (checked every 60s at most).
       React.useEffect(() => {
         let alive = true
         let busy = false
+        let timer = null
         const codes = syms.map((e) => e.code)
+        tzsRef.current = [] // unknown until first success -> conservative active
         const load = async () => {
           if (busy) return
           busy = true
           try {
             const data = await host.call('getQuotes', { syms: codes })
             if (!alive) return
-            if (data && data.ok) { setItems(data.items || []); setErr(null) }
-            else setErr((data && data.error) || '获取失败')
+            if (data && data.ok) {
+              setItems(data.items || [])
+              setErr(null)
+              const seen = []
+              for (const it of data.items || []) {
+                if (it && it.timezone && !seen.includes(it.timezone)) seen.push(it.timezone)
+              }
+              if (seen.length) tzsRef.current = seen
+            } else setErr((data && data.error) || '获取失败')
           } catch (e) {
             if (alive) setErr(String((e && e.message) || e))
           } finally {
             busy = false
           }
         }
+        const schedule = () => {
+          const delay = anyMarketOpen(tzsRef.current) ? ACTIVE_POLL_MS : IDLE_CHECK_MS
+          timer = ctx.timeout(() => {
+            if (anyMarketOpen(tzsRef.current)) load()
+            schedule()
+          }, delay)
+        }
         load()
-        const stop = ctx.interval(load, 5000)
-        return () => { alive = false; stop() }
+        schedule()
+        return () => {
+          alive = false
+          if (timer) timer()
+        }
       }, [codesKey])
 
       const onDown = (e) => {
@@ -220,13 +346,24 @@ return {
       }
       const onMove = (e) => {
         if (!drag.current) return
-        setPos({ x: e.clientX - drag.current.dx, y: e.clientY - drag.current.dy })
+        const next = { x: e.clientX - drag.current.dx, y: e.clientY - drag.current.dy }
+        posRef.current = next
+        setPos(next)
       }
-      const onUp = () => { drag.current = null }
+      const onUp = () => {
+        if (drag.current) writePos(posRef.current)
+        drag.current = null
+      }
 
       const openEditor = () => {
         setCollapsed(false)
         setEditing(true)
+      }
+
+      const togglePalette = () => {
+        const next = paletteName === 'us' ? 'jp' : 'us'
+        setPaletteName(next)
+        writePalette(next)
       }
 
       const labelFor = (code) => {
@@ -271,7 +408,15 @@ return {
               }),
               React.createElement('button', { className: 'shq-edit-btn', onClick: addDraft }, '添加')
             ),
-            React.createElement('div', { className: 'shq-edit-hint' }, '4位简码自动补 .T'),
+            React.createElement('div', { className: 'shq-edit-hint' },
+              React.createElement('div', null, '4 位简码仅日股，自动补 .T'),
+              React.createElement('div', null, '其它市场请输完整代码，如 AAPL / 0700.HK')
+            ),
+            React.createElement('button', {
+              className: 'shq-edit-btn',
+              style: { width: '100%', marginTop: '6px' },
+              onClick: togglePalette,
+            }, '涨跌配色：' + (paletteName === 'us' ? '绿涨红跌（美式）' : '红涨绿跌（日式）')),
             React.createElement('div', { className: 'shq-edit-foot' },
               React.createElement('button', {
                 className: 'shq-edit-btn',
@@ -285,7 +430,7 @@ return {
           )
         } else if (items && items.length) {
           body = React.createElement('div', { className: 'shq-body' },
-            items.map((it) => Row(it, labelFor(it.code) || it.name))
+            items.map((it) => Row(it, labelFor(it.code) || it.name, palette.up, palette.down))
           )
         } else {
           body = React.createElement('div', { className: 'shq-body' },

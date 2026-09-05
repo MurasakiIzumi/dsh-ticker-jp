@@ -2,6 +2,20 @@
 
 本项目的所有值得一提的变更都会记录在此文件。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [0.4.0] - 2026-09-04
+
+### Added
+
+- **窗口位置记忆**：悬浮窗拖拽位置持久化（localStorage `dsh-ticker-jp:pos`），启动时自动恢复并 clamp 到当前视口内（至少保留部分可见），避免显示器分辨率变化后窗口落到屏幕外。
+- **休市自动降频（市场时段感知轮询）**：Host 在成功条目中回传 Yahoo 交易所时区与交易所（`timezone`/`exchange`，取自 `meta.exchangeTimezoneName`/`meta.exchange`）；Client 依据自选标的所属市场的当地交易时段（仅周末 + 大致时段，忽略午休/节假日，`Intl` 自动处理夏令时）决定轮询节奏——任一市场开市时每 5s 轮询，全部休市时停止轮询、仅每 60s 检查是否临近开盘，窗口建立或自选列表变化时始终抓取一次快照；开盘后自动恢复 5s 节奏。未知时区一律保守视为开市。
+- **连续超时负面缓存**：Host 侧单标的连续 2 次抓取超时后进入 5 分钟冷却（`NEGATIVE_FAIL_THRESHOLD`/`NEGATIVE_COOLDOWN_MS`），冷却期内直接跳过该标的（错误文案 `temporarily skipped (repeated timeouts)`），成功抓取后即解除。两形态各自维护进程内状态。
+- **全球市场支持（文档与面板提示）**：Yahoo 数据源本就接受任意后缀代码（实测 AAPL/0700.HK/600519.SS/9984.T 均正常），README 与自选面板提示同步说明；4 位纯数字简码仅对日股自动补 `.T`，其它市场需输完整后缀。
+
+### Changed
+
+- **涨跌配色可配置**：⚙ 自选面板新增配色切换按钮（默认日式 红涨绿跌，可切 美式 绿涨红跌），偏好持久化（`dsh-ticker-jp:palette`），行内价格与涨跌幅颜色即时生效。
+- **自选面板提示更新**：hint 由一行拆为两行，说明简码仅限日股并给出其它市场完整代码示例。
+
 ## [0.3.2] - 2026-09-04
 
 ### Fixed

@@ -21,13 +21,19 @@
 // uses; ctx.timeout is a timer verb, so `inject: ['timer']` is declared on the
 // returned plugin — its one hard dependency. Symbols are fetched with bounded
 // concurrency, so the whole watch list completes in a handful of timeout
-// windows instead of one per symbol.
+// windows instead of one per symbol. Symbols that time out repeatedly enter a
+// short cooling period; successful items echo the exchange timezone so the
+// client can pause polling while every watched market is closed.
 
 const DEFAULTS = ['1306.T', '^N225']
 const MAX_SYMBOLS = 15
 const MAX_CONCURRENCY = 5
 const FETCH_TIMEOUT_MS = 5000
 const RE_SYMBOL = /^[A-Z0-9^][A-Z0-9.\-]*$/
+
+const NEGATIVE_FAIL_THRESHOLD = 2
+const NEGATIVE_COOLDOWN_MS = 5 * 60 * 1000
+const cooling = new Map() // symbol -> { fails, until }
 
 function normalizeSymbol(raw) {
   let s = String(raw == null ? '' : raw).trim().toUpperCase()
@@ -48,10 +54,37 @@ function collectSyms(args) {
   return out.length ? out : DEFAULTS
 }
 
+function isCooling(symbol, now) {
+  const rec = cooling.get(symbol)
+  if (!rec) return false
+  if (now < rec.until) return true
+  cooling.delete(symbol)
+  return false
+}
+
+function recordResult(symbol, timedOut, ok, now) {
+  if (ok) {
+    cooling.delete(symbol)
+    return
+  }
+  if (!timedOut) return
+  const rec = cooling.get(symbol) || { fails: 0, until: 0 }
+  rec.fails += 1
+  if (rec.fails >= NEGATIVE_FAIL_THRESHOLD) {
+    rec.fails = 0
+    rec.until = now + NEGATIVE_COOLDOWN_MS
+  }
+  cooling.set(symbol, rec)
+}
+
 // One Yahoo quote via ctx.web. `web` is the cordis web service (result shape:
 // { statusCode, body: { content } }) and `ctx` supplies the timeout race.
 // Always resolves { ok, item } or { ok:false, error } — never throws.
 async function fetchOne(symbol, web, ctx) {
+  const now = Date.now()
+  if (isCooling(symbol, now)) {
+    return { ok: false, error: `[${symbol}] temporarily skipped (repeated timeouts)` }
+  }
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`
   try {
     const timeoutError = new Error('fetch timed out after 5s')
@@ -80,9 +113,15 @@ async function fetchOne(symbol, web, ctx) {
     const changePct = meta.regularMarketChangePercent
     if (price == null || changePct == null) throw new Error('no price/change data')
     const name = meta.longName || meta.shortName || symbol
-    return { ok: true, item: { name, code: symbol, price, changePct } }
+    const item = { name, code: symbol, price, changePct }
+    if (meta.exchangeTimezoneName) item.timezone = meta.exchangeTimezoneName
+    if (meta.exchange) item.exchange = meta.exchange
+    recordResult(symbol, false, true, now)
+    return { ok: true, item }
   } catch (e) {
-    const reason = (e && e.name === 'TimeoutError')
+    const timedOut = !!(e && e.name === 'TimeoutError')
+    recordResult(symbol, timedOut, false, now)
+    const reason = timedOut
       ? 'fetch timed out after 5s'
       : String((e && e.message) || e)
     return { ok: false, error: `[${symbol}] ${reason}` }

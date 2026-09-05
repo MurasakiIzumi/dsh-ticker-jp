@@ -1,35 +1,12 @@
 // dsh-ticker-jp — Client half (dynamic-plugin form)
 //
-// Paste this whole file into the Client `code.client` of `cordis_define` to
-// load the plugin dynamically. It injects a draggable, collapsible floating
-// quote window into `shell.overlay` and polls the `getQuotes` RPC — every 5s
-// while at least one watched market is trading, otherwise only a 60s check
-// that resumes 5s polls once a market opens. A poll already in flight is
-// skipped, so a slow response never overlaps the next one.
+// 动态插件形态的 Client 半区：在页面右上角渲染可拖拽、可收起的悬浮行情窗，轮询
+// getQuotes RPC 展示报价，并支持自选标的与显示别名。
 //
-// UI strings are localized (zh-Hans / zh-Hant / en / ja; see the T table).
-// The language follows navigator.language on first run, can be overridden in
-// the ⚙ panel, and is persisted under `dsh-ticker-jp:lang`. When collapsed
-// the widget shrinks to a compact pill: the title is a market glyph (no
-// text, so language width does not matter) and the ⚙ button is hidden.
-//
-// Dynamic-client environment: React, styles, host and console arrive as fixed
-// closure symbols; ctx.get('slots') is an optional soft lookup, so none of
-// those needs an `inject` entry. ctx.timeout is a timer verb, which the
-// client-runner guard only exposes after declaring 'timer' below — that is
-// the plugin's one hard dependency.
-// The watch list is user-editable via the gear button: each entry is a code
-// plus an optional display alias (editable inline), persisted when
-// `localStorage` is available and otherwise kept for the page session.
-//
-// Window position and the up/down palette are persisted too (keys
-// `dsh-ticker-jp:pos` / `dsh-ticker-jp:palette`; jp = red-up/green-down,
-// us = green-up/red-down); positions are clamped to the viewport on read.
-// Successful items echo the Yahoo exchange timezone: while every watched
-// market is closed (weekend + approximate local hours only — lunch breaks and
-// holidays are not modelled, unknown timezones count as open) the poll pauses
-// and one snapshot is still fetched when the window is created or the
-// watchlist changes.
+// Dynamic-plugin client half: renders the draggable, collapsible floating quote
+// window at the top-right of the page, polls the getQuotes RPC for quotes, and
+// lets the user manage a watchlist with display aliases. Paste this whole file
+// as cordis_define's code.client to load it.
 
 const NEUTRAL = 'var(--dsw-alias-label-primary)'
 
@@ -47,6 +24,9 @@ const DEFAULTS = ['1306.T', '^N225']
 
 const RE_SYMBOL = /^[A-Z0-9^][A-Z0-9.\-]*$/
 
+// Local trading windows (open/close in local minutes) per Yahoo exchange
+// timezone. Only weekends + hours are modelled — lunch breaks and holidays
+// are skipped, and unknown timezones count as open.
 const MARKET_HOURS = {
   'Asia/Tokyo': { open: 9 * 60, close: 15 * 60 + 30 },
   'Asia/Hong_Kong': { open: 9 * 60 + 30, close: 16 * 60 },
@@ -55,16 +35,15 @@ const MARKET_HOURS = {
 }
 const ACTIVE_POLL_MS = 5000
 const IDLE_CHECK_MS = 60000
-const WIDGET_WIDTH = 232
+const EDIT_WIDTH = 300
 const MIN_VISIBLE = 40
 
 // --- Localization -------------------------------------------------------
 const LANG_KEYS = ['zhHans', 'zhHant', 'en', 'ja']
 const LANG_LABELS = { zhHans: '简体中文', zhHant: '繁體中文', en: 'English', ja: '日本語' }
 
-// Pick a supported language from a navigator.language tag: zh-Hant / zh-TW /
-// zh-HK -> traditional Chinese, any other zh -> simplified, ja / en -> their
-// own, everything else falls back to English.
+// navigator.language -> locale: zh-Hant/zh-TW/zh-HK/zh-MO is traditional,
+// other zh is simplified, ja/en map directly, anything else falls back to en.
 function detectLang(browserLang) {
   const tag = String(browserLang || '').toLowerCase()
   if (/^zh/.test(tag)) return /(hant|tw|hk|mo)/.test(tag) ? 'zhHant' : 'zhHans'
@@ -99,6 +78,7 @@ const T = {
     hint1: '4 位简码仅日股，自动补 .T', hint2: '其它市场请输完整代码，如 AAPL / 0700.HK',
     langLabel: '语言', paletteLabel: '涨跌配色：',
     paletteJp: '红涨绿跌（日式）', paletteUs: '绿涨红跌（美式）',
+    paletteTip: '点击切换配色（日式红涨绿跌 / 美式绿涨红跌）',
     loading: '加载中…', fetchFail: '获取失败', n225: '日经225',
   },
   zhHant: {
@@ -109,6 +89,7 @@ const T = {
     hint1: '4 位簡碼僅日股，自動補 .T', hint2: '其他市場請輸入完整代碼，如 AAPL / 0700.HK',
     langLabel: '語言', paletteLabel: '漲跌配色：',
     paletteJp: '紅漲綠跌（日式）', paletteUs: '綠漲紅跌（美式）',
+    paletteTip: '點擊切換配色（日式紅漲綠跌 / 美式綠漲紅跌）',
     loading: '載入中…', fetchFail: '取得失敗', n225: '日經225',
   },
   en: {
@@ -116,10 +97,11 @@ const T = {
     expand: 'Expand', collapse: 'Collapse',
     restore: 'Restore default', done: 'Done', add: 'Add', remove: 'Remove',
     namePh: 'Display name (optional)', codePh: 'Symbol, e.g. 9984.T',
-    hint1: '4-digit short code is Japan-only (.T auto-appended)',
-    hint2: 'Other markets need the full suffix, e.g. AAPL / 0700.HK',
+    hint1: '4-digit short code: Japan only (adds .T)',
+    hint2: 'Full code for other markets (AAPL / 0700.HK)',
     langLabel: 'Language', paletteLabel: 'Colors: ',
     paletteJp: 'Red-up / green-down (JP)', paletteUs: 'Green-up / red-down (US)',
+    paletteTip: 'Click to switch: JP = red up / green down, US = green up / red down',
     loading: 'Loading…', fetchFail: 'Fetch failed', n225: 'Nikkei 225',
   },
   ja: {
@@ -130,12 +112,12 @@ const T = {
     hint1: '4桁略号は日本株のみ（.T 補完）', hint2: '他市場は完全コード（AAPL / 0700.HK 等）',
     langLabel: '言語', paletteLabel: '色分け：',
     paletteJp: '値上がり赤・下がり緑（日本式）', paletteUs: '値上がり緑・下がり赤（米国式）',
+    paletteTip: '配色を切替（日本式 上昇赤・下落緑 / 米国式 上昇緑・下落赤）',
     loading: '読み込み中…', fetchFail: '取得に失敗', n225: '日経225',
   },
 }
 
-// Builtin short display name for a default symbol, localized. Anything else
-// resolves through the user alias or the Yahoo name.
+// Builtin short names for the two defaults, localized per UI language.
 function shortNameFor(code, lang) {
   if (code === '1306.T') return 'TOPIX ETF'
   if (code === '^N225') return (T[lang] || T.en).n225
@@ -208,8 +190,22 @@ function writeSyms(list) {
 }
 
 // --- Window position ----------------------------------------------------
+// pos = { x, y }: x is the CSS `right` offset (window anchored by its RIGHT
+// edge, so the collapse/expand button never moves when the width changes),
+// y is the top offset. Stored positions are clamped so at least one grab
+// area stays on screen; the widest mode (EDIT_WIDTH) drives the left bound.
+function clampPos(raw, vw, vh) {
+  const minX = MIN_VISIBLE
+  const maxX = Math.max(minX, vw - EDIT_WIDTH + MIN_VISIBLE)
+  const maxY = Math.max(0, vh - MIN_VISIBLE)
+  return {
+    x: Math.min(Math.max(minX, Math.round(raw.x)), maxX),
+    y: Math.min(Math.max(0, Math.round(raw.y)), maxY),
+  }
+}
+
 function readPos() {
-  const fallback = { x: 16, y: 16 }
+  const fallback = { x: 24, y: 16 }
   let parsed = null
   if (canStore()) {
     try {
@@ -220,12 +216,7 @@ function readPos() {
   const rawPos = (parsed && typeof parsed === 'object' && typeof parsed.x === 'number' && typeof parsed.y === 'number')
     ? parsed
     : fallback
-  const maxX = Math.max(0, window.innerWidth - WIDGET_WIDTH - MIN_VISIBLE)
-  const maxY = Math.max(0, window.innerHeight - MIN_VISIBLE)
-  return {
-    x: Math.min(Math.max(0, Math.round(rawPos.x)), maxX),
-    y: Math.min(Math.max(0, Math.round(rawPos.y)), maxY),
-  }
+  return clampPos(rawPos, window.innerWidth, window.innerHeight)
 }
 
 function writePos(pos) {
@@ -295,13 +286,19 @@ return {
     ctx.effect(() => styles.insert(`
 .shq-widget{position:fixed;z-index:99999;width:232px;background:#1a1c23;background:color-mix(in srgb, var(--dsw-alias-bg-overlay,#1a1c23) 80%, transparent);color:var(--dsw-alias-label-primary,#eef0f4);border:1px solid var(--dsw-alias-border-l1,rgba(255,255,255,.12));border-radius:14px;box-shadow:0 8px 28px rgba(0,0,0,.25);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;user-select:none;-webkit-user-select:none;overflow:hidden}
 .shq-widget.shq-collapsed{width:auto}
+.shq-widget.shq-editing{width:300px}
 .shq-head{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:8px 12px;cursor:grab;touch-action:none;border-bottom:1px solid var(--dsw-alias-border-l1,rgba(255,255,255,.08))}
-.shq-collapsed .shq-head{border-bottom:none;padding:5px 8px}
+.shq-collapsed .shq-head{border-bottom:none;padding:8px 12px 6px}
 .shq-head:active{cursor:grabbing}
 .shq-title{font-size:12px;font-weight:600;letter-spacing:.04em;color:var(--dsw-alias-label-secondary,#c7ccd6);white-space:nowrap}
-.shq-icon{font-size:13px;line-height:1;padding:0 2px}
+.shq-collapse-face{display:inline-flex;align-items:center;gap:4px;height:14px;padding:0 3px 0 1px}
+.shq-glyph{display:inline-flex;align-items:flex-end;gap:2px}
+.shq-bar{width:3px;border-radius:1px;background:var(--dsw-alias-label-secondary,#c7ccd6);display:inline-block}
+.shq-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.25);display:inline-block;flex:none}
+.shq-dot-open{background:#00e08a;box-shadow:0 0 3px rgba(0,224,138,.55)}
+.shq-dot-closed{background:#ff3b30;box-shadow:0 0 3px rgba(255,59,48,.55)}
 .shq-tools{display:flex;align-items:center;gap:5px}
-.shq-tool{height:18px;border:none;border-radius:6px;background:var(--dsw-alias-border-l1,rgba(255,255,255,.1));color:var(--dsw-alias-label-secondary,#aab0bc);cursor:pointer;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;opacity:.85;padding:0 4px}
+.shq-tool{width:18px;height:18px;border:none;border-radius:6px;background:var(--dsw-alias-border-l1,rgba(255,255,255,.1));color:var(--dsw-alias-label-secondary,#aab0bc);cursor:pointer;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;opacity:.85;padding:0}
 .shq-tool:hover{background:var(--dsw-alias-border-l2,rgba(255,255,255,.18));color:var(--dsw-alias-label-primary,#eef0f4)}
 .shq-body{padding:5px 12px 8px}
 .shq-row{display:flex;align-items:baseline;padding:6px 0}
@@ -333,8 +330,6 @@ return {
 .shq-edit-foot{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:12px}
 `))
 
-    // One quote row; `name` is already resolved (alias > builtin > Yahoo).
-    // `up`/`down` are the palette colors for the current preference.
     function Row(item, name, up, down) {
       const c = (item && typeof item.changePct === 'number')
         ? (item.changePct > 0 ? up : item.changePct < 0 ? down : NEUTRAL)
@@ -357,6 +352,7 @@ return {
       const [draft, setDraft] = React.useState('')
       const [paletteName, setPaletteName] = React.useState(readPalette)
       const [lang, setLang] = React.useState(readLang)
+      const [nowTick, setNowTick] = React.useState(0)
       const drag = React.useRef(null)
       const posRef = React.useRef(null)
       const tzsRef = React.useRef([])
@@ -396,11 +392,10 @@ return {
 
       const codesKey = syms.map((e) => e.code).join(',')
 
-      // Polling scheduler: fetch one snapshot immediately (window creation or
-      // watchlist/language change), then poll every ACTIVE_POLL_MS while any
-      // watched market is in its local trading window; while all are closed,
-      // stop polling and only re-check at IDLE_CHECK_MS, resuming 5s polls the
-      // moment some market opens (checked every 60s at most).
+      // Poll cadence: every 5s while any watched market trades, otherwise a
+      // 60s check that resumes 5s polls once a market opens (and keeps the
+      // state dot fresh). One snapshot is fetched on mount / list / language
+      // change.
       React.useEffect(() => {
         let alive = true
         let busy = false
@@ -430,11 +425,12 @@ return {
           }
         }
         const schedule = () => {
-          const delay = anyMarketOpen(tzsRef.current) ? ACTIVE_POLL_MS : IDLE_CHECK_MS
+          const open = anyMarketOpen(tzsRef.current)
           timer = ctx.timeout(() => {
-            if (anyMarketOpen(tzsRef.current)) load()
+            if (open) load()
+            else setNowTick((c) => c + 1) // keep the state dot re-evaluated while closed
             schedule()
-          }, delay)
+          }, open ? ACTIVE_POLL_MS : IDLE_CHECK_MS)
         }
         load()
         schedule()
@@ -445,12 +441,17 @@ return {
       }, [codesKey, lang])
 
       const onDown = (e) => {
-        drag.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y }
+        drag.current = { dx: pos.x - (window.innerWidth - e.clientX), dy: pos.y - e.clientY }
         if (e.currentTarget && e.currentTarget.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId)
       }
       const onMove = (e) => {
         if (!drag.current) return
-        const next = { x: e.clientX - drag.current.dx, y: e.clientY - drag.current.dy }
+        const vw = window.innerWidth
+        const vh = window.innerHeight
+        const next = clampPos(
+          { x: (vw - e.clientX) + drag.current.dx, y: e.clientY + drag.current.dy },
+          vw, vh
+        )
         posRef.current = next
         setPos(next)
       }
@@ -527,6 +528,7 @@ return {
             ),
             React.createElement('button', {
               className: 'shq-edit-btn shq-palette-btn',
+              title: t.paletteTip,
               onClick: togglePalette,
             }, t.paletteLabel + (paletteName === 'us' ? t.paletteUs : t.paletteJp)),
             React.createElement('div', { className: 'shq-edit-foot' },
@@ -551,10 +553,27 @@ return {
         }
       }
 
-      const widgetClass = collapsed ? 'shq-widget shq-collapsed' : 'shq-widget'
+      // Collapsed = compact pill: bar-chart glyph + state dot (no text, so the
+      // title never varies with language width) and no gear button; the edit
+      // panel widens to 300px. The dot glows green while any watched market
+      // trades and red when all are closed.
+      const widgetClass = collapsed
+        ? 'shq-widget shq-collapsed'
+        : editing ? 'shq-widget shq-editing' : 'shq-widget'
       let title
       if (collapsed) {
-        title = React.createElement('span', { className: 'shq-title shq-icon', 'aria-hidden': true }, '📈')
+        title = React.createElement('span', {
+          className: 'shq-collapse-face',
+          title: t.title,
+          'aria-hidden': true,
+        },
+          React.createElement('span', { className: 'shq-glyph' },
+            React.createElement('i', { className: 'shq-bar', style: { height: '6px' } }),
+            React.createElement('i', { className: 'shq-bar', style: { height: '10px' } }),
+            React.createElement('i', { className: 'shq-bar', style: { height: '8px' } })
+          ),
+          React.createElement('i', { className: anyMarketOpen(tzsRef.current) ? 'shq-dot shq-dot-open' : 'shq-dot shq-dot-closed' })
+        )
       } else {
         title = React.createElement('span', { className: 'shq-title' }, editing ? t.titleEdit : t.title)
       }
@@ -574,9 +593,9 @@ return {
         title: collapsed ? t.expand : t.collapse,
         onPointerDown: (e) => e.stopPropagation(),
         onClick: () => setCollapsed((v) => !v),
-      }, collapsed ? '+' : '—'))
+      }, collapsed ? '+' : '−'))
 
-      return React.createElement('div', { className: widgetClass, style: { left: pos.x + 'px', top: pos.y + 'px' } },
+      return React.createElement('div', { className: widgetClass, style: { right: pos.x + 'px', top: pos.y + 'px' } },
         React.createElement('div', {
           className: 'shq-head',
           onPointerDown: onDown,

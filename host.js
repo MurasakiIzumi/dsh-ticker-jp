@@ -1,29 +1,11 @@
 // dsh-ticker-jp — Host half (dynamic-plugin form)
 //
-// Paste this whole file into the Host `code.host` of `cordis_define` to load
-// the plugin dynamically. It exposes the Package-private RPC `getQuotes`,
-// which serves market quotes fetched from Yahoo Finance's chart API.
+// 动态插件形态的 Host 半区：为 Client 提供 getQuotes RPC（经 host.call 调用），从
+// Yahoo Finance 拉取行情并返回 { ok, items } 或 { ok:false, error }。
 //
-// The Client calls `host.call('getQuotes', { syms: [...] })`; syms may be an
-// array or a comma-separated string and defaults to ['1306.T', '^N225'].
-// Symbols are trimmed/uppercased, validated against a whitelist, de-duplicated
-// and capped; a bare 4-digit code (9984) is expanded to `9984.T`. Per-symbol
-// failures never abort the batch — the RPC answers { ok:true, items } for
-// partial success and { ok:false, error } only when nothing could be fetched.
-// Display names come from the Yahoo meta (longName -> shortName), falling back
-// to the raw code.
-//
-// Why this file differs from the bundle Host (lib/index.js): a dynamic host
-// half runs inside a node:vm sandbox that traps the native `fetch` (and has no
-// `AbortSignal`), so requests go through the cordis web service instead —
-// `ctx.get('web')` is an optional soft lookup (no `inject` entry needed). Each
-// call races the web fetch against ctx.timeout for the same 5s cap the bundle
-// uses; ctx.timeout is a timer verb, so `inject: ['timer']` is declared on the
-// returned plugin — its one hard dependency. Symbols are fetched with bounded
-// concurrency, so the whole watch list completes in a handful of timeout
-// windows instead of one per symbol. Symbols that time out repeatedly enter a
-// short cooling period; successful items echo the exchange timezone so the
-// client can pause polling while every watched market is closed.
+// Dynamic-plugin host half: serves the getQuotes RPC (called via host.call) with
+// quotes from Yahoo Finance, answering { ok, items } or { ok:false, error }.
+// Paste this whole file as cordis_define's code.host to load it.
 
 const DEFAULTS = ['1306.T', '^N225']
 const MAX_SYMBOLS = 15
@@ -31,10 +13,12 @@ const MAX_CONCURRENCY = 5
 const FETCH_TIMEOUT_MS = 5000
 const RE_SYMBOL = /^[A-Z0-9^][A-Z0-9.\-]*$/
 
+// Negative cache: 2 consecutive timeouts put a symbol on a 5-minute cooldown.
 const NEGATIVE_FAIL_THRESHOLD = 2
 const NEGATIVE_COOLDOWN_MS = 5 * 60 * 1000
 const cooling = new Map() // symbol -> { fails, until }
 
+// Whitelists a symbol; a bare 4-digit code is treated as Japan and expanded to 9984.T.
 function normalizeSymbol(raw) {
   let s = String(raw == null ? '' : raw).trim().toUpperCase()
   if (!s) return ''
@@ -62,6 +46,7 @@ function isCooling(symbol, now) {
   return false
 }
 
+// Success clears the cooldown; only timeouts count — other errors are ignored.
 function recordResult(symbol, timedOut, ok, now) {
   if (ok) {
     cooling.delete(symbol)
@@ -77,9 +62,10 @@ function recordResult(symbol, timedOut, ok, now) {
   cooling.set(symbol, rec)
 }
 
-// One Yahoo quote via ctx.web. `web` is the cordis web service (result shape:
-// { statusCode, body: { content } }) and `ctx` supplies the timeout race.
-// Always resolves { ok, item } or { ok:false, error } — never throws.
+// One symbol via ctx.web (result shape: { statusCode, body: { content } }),
+// raced against ctx.timeout for the same 5s cap as the bundle host. Both race
+// arms settle into tagged results so the loser never leaves an unhandled
+// rejection; timezone/exchange are echoed for the client's market-hours logic.
 async function fetchOne(symbol, web, ctx) {
   const now = Date.now()
   if (isCooling(symbol, now)) {
@@ -89,9 +75,6 @@ async function fetchOne(symbol, web, ctx) {
   try {
     const timeoutError = new Error('fetch timed out after 5s')
     timeoutError.name = 'TimeoutError'
-    // Race the web fetch against the 5s cap. Both arms settle into a tagged
-    // result (never a raw rejection), so the losing promise can never surface
-    // an unhandled rejection once the race has settled.
     const result = await Promise.race([
       web.fetch({ url }).then(
         (value) => ({ ok: true, value }),
@@ -128,6 +111,7 @@ async function fetchOne(symbol, web, ctx) {
   }
 }
 
+// Fetches the batch with bounded concurrency; results keep the input order.
 async function fetchQuotes(symbols, web, ctx) {
   const items = []
   const errors = []
@@ -148,6 +132,9 @@ async function fetchQuotes(symbols, web, ctx) {
 }
 
 return {
+  // Dynamic host halves run in a node:vm sandbox that traps the native fetch,
+  // so requests go through ctx.get('web') (a soft lookup, no inject entry) and
+  // the 5s cap is a ctx.timeout race — hence inject: ['timer'].
   inject: ['timer'],
   apply(ctx) {
     ctx.effect(() =>

@@ -82,14 +82,19 @@ dsh plugin --profile web add github:MurasakiIzumi/dsh-ticker-jp
 
 ```
 dsh-ticker-jp/
-├── lib/index.js    # Host 包入口：注册 /dsh-ticker-jp/quotes 路由
-├── lib/client.js   # Client bundle：悬浮窗 UI + 5s 轮询 + 自选/别名
-├── host.js         # 动态插件 Host 半区（可选；沙箱内经 ctx.web 抓取，RPC 契约与 lib/index.js 一致）
-├── client.js       # 动态插件形式的 Client 半区（可选，与 lib/client.js 逻辑等价）
-├── package.json    # 包清单（dsh bundle + client 声明）
-├── cordis.patch.yml  # bundle patch：插入插件行
+├── lib/index.js       # Host 包入口：注册 /dsh-ticker-jp/quotes 路由
+├── lib/index.d.ts     # Host 入口类型声明
+├── lib/client.js      # Client bundle：悬浮窗 UI + 5s 轮询 + 自选/别名
+├── lib/client.d.ts    # Client bundle 类型声明
+├── host.js            # 动态插件 Host 半区（可选；沙箱内经 ctx.web 抓取，RPC 契约与 lib/index.js 一致）
+├── client.js          # 动态插件形式的 Client 半区（可选，与 lib/client.js 逻辑等价）
+├── package.json       # 包清单（dsh bundle + client 声明）
+├── cordis.patch.yml   # bundle patch：插入插件行
+├── CHANGELOG.md       # 版本变更记录
 ├── assets/screenshot.png   # 悬浮行情预览
-├── assets/screenshot2.png  # 自选行情设置预览
+├── assets/screenshot2.png  # 收起态预览
+├── assets/screenshot3.png  # 自选行情设置预览
+├── assets/screenshot4.png  # 自选行情设置预览（英文界面）
 ├── LICENSE
 └── README.md
 ```

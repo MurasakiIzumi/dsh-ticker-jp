@@ -2,6 +2,20 @@
 
 本项目的所有值得一提的变更都会记录在此文件。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [0.5.2] - 2026-09-05
+
+### Fixed
+
+- **轮询失败可见性**：展开态此前一旦成功获取过一次行情，后续整批获取失败（单标的全超时、网络错误、负面缓存全跳过等）时错误提示会被旧的行情视图掩盖，界面静默展示过期数据；现失败时优先显示错误文案，下一轮成功即自动恢复行情视图。「休市自动降频」的保留最近数据行为不受影响——休市仅停止轮询、不产生错误状态。
+- **涨跌幅接近零的负值显示**：|涨跌幅| < 0.005 的轻微下跌不再渲染为「-0.00%」，与正侧一并归一为「0.00%」。
+
+### Changed
+
+- **Client 双形态镜像对齐**：bundle `lib/client.js` 补上动态形态已有的 `canStore()` 存储守卫（各 `read*`/`write*` 一致使用）与 `anyMarketOpen` 的当前时间默认值，`zoneNow` 解析写法与动态形态统一——两个 Client 文件恢复逻辑逐字等价（镜像约定重新成立）。
+- **收起态状态灯刷新依赖显式化**：「市场是否开市」判定从 JSX 内联调用抽为 `useMemo`（依赖 `nowTick / items / syms`），休市期间每分钟的 idle tick 与数据/列表变化均显式驱动状态灯重评估，同时消除未被读取的 `nowTick` 计数歧义。
+- **README 代码结构树补全**：补充 `lib/index.d.ts` / `lib/client.d.ts` / `CHANGELOG.md` 与 `screenshot3.png` / `screenshot4.png` 条目。
+- **包描述措辞**：`package.json` description 中「TOPIX」更正为「TOPIX ETF」，与默认数据源 `1306.T`（TOPIX 联动 ETF）一致。
+
 ## [0.5.1] - 2026-09-05
 
 ### Added

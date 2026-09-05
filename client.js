@@ -272,8 +272,10 @@ function anyMarketOpen(tzs, date = new Date()) {
 
 // --- Formatting ---------------------------------------------------------
 const fmt = (n) => {
-  const v = Number(n)
-  return (n == null || !Number.isFinite(v)) ? '--' : v.toFixed(2)
+  const raw = Number(n)
+  if (n == null || !Number.isFinite(raw)) return '--'
+  const v = Math.abs(raw) < 0.005 ? 0 : raw // avoid "-0.00" for near-zero drops
+  return v.toFixed(2)
 }
 const sign = (n) => (n > 0 ? '+' : '')
 
@@ -476,6 +478,15 @@ return {
         return (entry && entry.name) || shortNameFor(code, lang) || ''
       }
 
+      // Market-open state drives the collapsed dot. Re-computed when data, the
+      // list or an idle tick changes: fetch success updates tzsRef together
+      // with items, and while every market is closed the idle loop bumps
+      // nowTick each minute so this re-evaluates without extra requests.
+      const marketOpen = React.useMemo(
+        () => anyMarketOpen(tzsRef.current),
+        [nowTick, items, syms],
+      )
+
       let body = null
       if (!collapsed) {
         if (editing) {
@@ -542,7 +553,7 @@ return {
               }, t.done)
             )
           )
-        } else if (items && items.length) {
+        } else if (!err && items && items.length) {
           body = React.createElement('div', { className: 'shq-body' },
             items.map((it) => Row(it, labelFor(it.code) || it.name, palette.up, palette.down))
           )
@@ -572,7 +583,7 @@ return {
             React.createElement('i', { className: 'shq-bar', style: { height: '10px' } }),
             React.createElement('i', { className: 'shq-bar', style: { height: '8px' } })
           ),
-          React.createElement('i', { className: anyMarketOpen(tzsRef.current) ? 'shq-dot shq-dot-open' : 'shq-dot shq-dot-closed' })
+          React.createElement('i', { className: marketOpen ? 'shq-dot shq-dot-open' : 'shq-dot shq-dot-closed' })
         )
       } else {
         title = React.createElement('span', { className: 'shq-title' }, editing ? t.titleEdit : t.title)

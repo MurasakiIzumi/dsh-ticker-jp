@@ -38,7 +38,13 @@ A small floating ticker for the top-right corner of DeepSeek Harness. It shows t
 
 ## 🚀 Install
 
+Install from npm (prebuilt, no build approval needed), or straight from the GitHub source:
+
 ```bash
+# npm (recommended)
+dsh plugin --profile web add dsh-ticker-jp
+
+# GitHub source
 dsh plugin --profile web add github:MurasakiIzumi/dsh-ticker-jp
 ```
 

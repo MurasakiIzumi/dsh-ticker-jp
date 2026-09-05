@@ -2,6 +2,12 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [1.0.1] - 2026-09-05
+
+### Changed
+
+- 两版 README 安装节补充 npm 安装方式：`dsh plugin --profile web add dsh-ticker-jp`（npm 预构建安装，免构建授权；GitHub 源码方式保留）。纯文档更新，对外行为不变。
+
 ## [1.0.0] - 2026-09-05
 
 ### Changed

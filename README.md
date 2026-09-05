@@ -38,7 +38,13 @@
 
 ## 🚀 安装
 
+从 npm 安装（预构建、免构建授权），或直接从 GitHub 源码安装：
+
 ```bash
+# npm（推荐）
+dsh plugin --profile web add dsh-ticker-jp
+
+# GitHub 源码
 dsh plugin --profile web add github:MurasakiIzumi/dsh-ticker-jp
 ```
 

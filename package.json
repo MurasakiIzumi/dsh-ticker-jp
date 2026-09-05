@@ -1,6 +1,6 @@
 {
   "name": "dsh-ticker-jp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "日股行情悬浮窗插件：DeepSeek Harness 右上角实时显示日经225 与 TOPIX ETF 报价（Yahoo Finance 数据源），支持自选任意代码与显示别名、休市自动降频、16 种界面语言。由 dsh-stock-ticker 改版而来。/Floating Japanese-stock ticker for DeepSeek Harness — real-time Nikkei 225 / TOPIX ETF quotes via Yahoo Finance, custom watchlist & aliases. Forked from dsh-stock-ticker.",
   "license": "MIT",
   "keywords": [

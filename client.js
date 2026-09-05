@@ -7,6 +7,12 @@
 // that resumes 5s polls once a market opens. A poll already in flight is
 // skipped, so a slow response never overlaps the next one.
 //
+// UI strings are localized (zh-Hans / zh-Hant / en / ja; see the T table).
+// The language follows navigator.language on first run, can be overridden in
+// the ⚙ panel, and is persisted under `dsh-ticker-jp:lang`. When collapsed
+// the widget shrinks to a compact pill: the title is a market glyph (no
+// text, so language width does not matter) and the ⚙ button is hidden.
+//
 // Dynamic-client environment: React, styles, host and console arrive as fixed
 // closure symbols; ctx.get('slots') is an optional soft lookup, so none of
 // those needs an `inject` entry. ctx.timeout is a timer verb, which the
@@ -35,10 +41,9 @@ const PALETTES = {
 const STORAGE_KEY = 'dsh-ticker-jp:syms'
 const POS_KEY = 'dsh-ticker-jp:pos'
 const PALETTE_KEY = 'dsh-ticker-jp:palette'
+const LANG_KEY = 'dsh-ticker-jp:lang'
 
 const DEFAULTS = ['1306.T', '^N225']
-
-const DISPLAY = { '1306.T': 'TOPIX ETF', '^N225': '日経225' }
 
 const RE_SYMBOL = /^[A-Z0-9^][A-Z0-9.\-]*$/
 
@@ -53,6 +58,91 @@ const IDLE_CHECK_MS = 60000
 const WIDGET_WIDTH = 232
 const MIN_VISIBLE = 40
 
+// --- Localization -------------------------------------------------------
+const LANG_KEYS = ['zhHans', 'zhHant', 'en', 'ja']
+const LANG_LABELS = { zhHans: '简体中文', zhHant: '繁體中文', en: 'English', ja: '日本語' }
+
+// Pick a supported language from a navigator.language tag: zh-Hant / zh-TW /
+// zh-HK -> traditional Chinese, any other zh -> simplified, ja / en -> their
+// own, everything else falls back to English.
+function detectLang(browserLang) {
+  const tag = String(browserLang || '').toLowerCase()
+  if (/^zh/.test(tag)) return /(hant|tw|hk|mo)/.test(tag) ? 'zhHant' : 'zhHans'
+  if (/^ja/.test(tag)) return 'ja'
+  return 'en'
+}
+
+function readLang() {
+  let value = null
+  if (canStore()) {
+    try {
+      value = localStorage.getItem(LANG_KEY)
+    } catch (e) { value = null }
+  }
+  if (LANG_KEYS.indexOf(value) !== -1) return value
+  return detectLang(typeof navigator !== 'undefined' ? navigator.language : '')
+}
+
+function writeLang(name) {
+  if (!canStore()) return
+  try {
+    localStorage.setItem(LANG_KEY, name)
+  } catch (e) { /* ignore quota / privacy errors */ }
+}
+
+const T = {
+  zhHans: {
+    title: '行情', titleEdit: '自选行情', settings: '自选设置',
+    expand: '展开', collapse: '收起',
+    restore: '恢复默认', done: '完成', add: '添加', remove: '移除',
+    namePh: '显示名（可选）', codePh: '股票代码，如 9984.T',
+    hint1: '4 位简码仅日股，自动补 .T', hint2: '其它市场请输完整代码，如 AAPL / 0700.HK',
+    langLabel: '语言', paletteLabel: '涨跌配色：',
+    paletteJp: '红涨绿跌（日式）', paletteUs: '绿涨红跌（美式）',
+    loading: '加载中…', fetchFail: '获取失败', n225: '日经225',
+  },
+  zhHant: {
+    title: '行情', titleEdit: '自選行情', settings: '自選設定',
+    expand: '展開', collapse: '收起',
+    restore: '恢復預設', done: '完成', add: '新增', remove: '移除',
+    namePh: '顯示名稱（可選）', codePh: '股票代碼，如 9984.T',
+    hint1: '4 位簡碼僅日股，自動補 .T', hint2: '其他市場請輸入完整代碼，如 AAPL / 0700.HK',
+    langLabel: '語言', paletteLabel: '漲跌配色：',
+    paletteJp: '紅漲綠跌（日式）', paletteUs: '綠漲紅跌（美式）',
+    loading: '載入中…', fetchFail: '取得失敗', n225: '日經225',
+  },
+  en: {
+    title: 'Markets', titleEdit: 'Watchlist', settings: 'Watchlist settings',
+    expand: 'Expand', collapse: 'Collapse',
+    restore: 'Restore default', done: 'Done', add: 'Add', remove: 'Remove',
+    namePh: 'Display name (optional)', codePh: 'Symbol, e.g. 9984.T',
+    hint1: '4-digit short code is Japan-only (.T auto-appended)',
+    hint2: 'Other markets need the full suffix, e.g. AAPL / 0700.HK',
+    langLabel: 'Language', paletteLabel: 'Colors: ',
+    paletteJp: 'Red-up / green-down (JP)', paletteUs: 'Green-up / red-down (US)',
+    loading: 'Loading…', fetchFail: 'Fetch failed', n225: 'Nikkei 225',
+  },
+  ja: {
+    title: '相場', titleEdit: 'ウォッチリスト', settings: 'ウォッチリスト設定',
+    expand: '開く', collapse: '閉じる',
+    restore: '初期化', done: '完了', add: '追加', remove: '削除',
+    namePh: '表示名（任意）', codePh: '銘柄コード、例 9984.T',
+    hint1: '4桁略号は日本株のみ（.T 補完）', hint2: '他市場は完全コード（AAPL / 0700.HK 等）',
+    langLabel: '言語', paletteLabel: '色分け：',
+    paletteJp: '値上がり赤・下がり緑（日本式）', paletteUs: '値上がり緑・下がり赤（米国式）',
+    loading: '読み込み中…', fetchFail: '取得に失敗', n225: '日経225',
+  },
+}
+
+// Builtin short display name for a default symbol, localized. Anything else
+// resolves through the user alias or the Yahoo name.
+function shortNameFor(code, lang) {
+  if (code === '1306.T') return 'TOPIX ETF'
+  if (code === '^N225') return (T[lang] || T.en).n225
+  return ''
+}
+
+// --- Watch list ---------------------------------------------------------
 // "9984" -> "9984.T"; returns "" for empty / invalid input.
 function normalizeSymbol(raw) {
   let s = String(raw == null ? '' : raw).trim().toUpperCase()
@@ -117,6 +207,7 @@ function writeSyms(list) {
   } catch (e) { /* ignore quota / privacy errors */ }
 }
 
+// --- Window position ----------------------------------------------------
 function readPos() {
   const fallback = { x: 16, y: 16 }
   let parsed = null
@@ -144,6 +235,7 @@ function writePos(pos) {
   } catch (e) { /* ignore quota / privacy errors */ }
 }
 
+// --- Palette preference (default jp) ------------------------------------
 function readPalette() {
   let value = null
   if (canStore()) {
@@ -161,6 +253,7 @@ function writePalette(name) {
   } catch (e) { /* ignore quota / privacy errors */ }
 }
 
+// --- Market hours -------------------------------------------------------
 function zoneNow(tz, date) {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: tz, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
@@ -186,6 +279,7 @@ function anyMarketOpen(tzs, date = new Date()) {
   return false
 }
 
+// --- Formatting ---------------------------------------------------------
 const fmt = (n) => {
   const v = Number(n)
   return (n == null || !Number.isFinite(v)) ? '--' : v.toFixed(2)
@@ -200,9 +294,12 @@ return {
 
     ctx.effect(() => styles.insert(`
 .shq-widget{position:fixed;z-index:99999;width:232px;background:#1a1c23;background:color-mix(in srgb, var(--dsw-alias-bg-overlay,#1a1c23) 80%, transparent);color:var(--dsw-alias-label-primary,#eef0f4);border:1px solid var(--dsw-alias-border-l1,rgba(255,255,255,.12));border-radius:14px;box-shadow:0 8px 28px rgba(0,0,0,.25);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;user-select:none;-webkit-user-select:none;overflow:hidden}
-.shq-head{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:grab;touch-action:none;border-bottom:1px solid var(--dsw-alias-border-l1,rgba(255,255,255,.08))}
+.shq-widget.shq-collapsed{width:auto}
+.shq-head{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:8px 12px;cursor:grab;touch-action:none;border-bottom:1px solid var(--dsw-alias-border-l1,rgba(255,255,255,.08))}
+.shq-collapsed .shq-head{border-bottom:none;padding:5px 8px}
 .shq-head:active{cursor:grabbing}
-.shq-title{font-size:12px;font-weight:600;letter-spacing:.04em;color:var(--dsw-alias-label-secondary,#c7ccd6)}
+.shq-title{font-size:12px;font-weight:600;letter-spacing:.04em;color:var(--dsw-alias-label-secondary,#c7ccd6);white-space:nowrap}
+.shq-icon{font-size:13px;line-height:1;padding:0 2px}
 .shq-tools{display:flex;align-items:center;gap:5px}
 .shq-tool{height:18px;border:none;border-radius:6px;background:var(--dsw-alias-border-l1,rgba(255,255,255,.1));color:var(--dsw-alias-label-secondary,#aab0bc);cursor:pointer;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;opacity:.85;padding:0 4px}
 .shq-tool:hover{background:var(--dsw-alias-border-l2,rgba(255,255,255,.18));color:var(--dsw-alias-label-primary,#eef0f4)}
@@ -213,8 +310,8 @@ return {
 .shq-price{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;flex:none}
 .shq-pct{font-size:11.5px;font-weight:700;font-variant-numeric:tabular-nums;width:64px;text-align:right;flex:none}
 .shq-err{font-size:12px;color:var(--dsw-alias-label-secondary,#8f96a3);padding:4px 0}
-.shq-edit{padding:6px 10px 8px}
-.shq-edit-list{max-height:150px;overflow:auto;margin-bottom:6px}
+.shq-edit{padding:8px 10px 10px}
+.shq-edit-list{max-height:150px;overflow:auto}
 .shq-edit-row{display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--dsw-alias-border-l1,rgba(255,255,255,.05))}
 .shq-edit-code{flex:none;width:86px;font-size:11.5px;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary,#aab0bc);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .shq-edit-name{flex:1;min-width:0;border:1px solid transparent;border-radius:6px;background:rgba(255,255,255,.04);color:var(--dsw-alias-label-primary,#eef0f4);font-size:12px;padding:2px 6px;outline:none}
@@ -223,13 +320,17 @@ return {
 .shq-edit-remove{flex:none;border:none;background:transparent;color:var(--dsw-alias-label-secondary,#8f96a3);cursor:pointer;font-size:13px;line-height:1;padding:0 2px}
 .shq-edit-remove:hover{color:#ff3b30}
 .shq-edit-remove:disabled{opacity:.35;cursor:default}
-.shq-edit-add{display:flex;gap:6px;margin-top:6px}
+.shq-edit-add{display:flex;gap:6px;margin-top:10px}
 .shq-edit-input{flex:1;min-width:0;border:1px solid var(--dsw-alias-border-l1,rgba(255,255,255,.16));border-radius:6px;background:rgba(255,255,255,.05);color:var(--dsw-alias-label-primary,#eef0f4);font-size:12px;padding:3px 8px;outline:none}
 .shq-edit-input:focus{border-color:rgba(255,255,255,.35)}
 .shq-edit-btn{border:none;border-radius:6px;background:var(--dsw-alias-border-l1,rgba(255,255,255,.1));color:var(--dsw-alias-label-secondary,#aab0bc);cursor:pointer;font-size:12px;padding:3px 10px;flex:none}
 .shq-edit-btn:hover{background:var(--dsw-alias-border-l2,rgba(255,255,255,.18));color:var(--dsw-alias-label-primary,#eef0f4)}
-.shq-edit-hint{font-size:10.5px;line-height:1.5;color:var(--dsw-alias-label-secondary,#8f96a3);margin-top:6px}
-.shq-edit-foot{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:8px}
+.shq-edit-hint{font-size:10.5px;line-height:1.5;color:var(--dsw-alias-label-secondary,#8f96a3);margin-top:10px}
+.shq-pref-row{display:flex;align-items:center;gap:8px;margin-top:10px}
+.shq-pref-label{font-size:11px;color:var(--dsw-alias-label-secondary,#aab0bc);flex:none;white-space:nowrap}
+.shq-lang{flex:1;min-width:0;border:1px solid var(--dsw-alias-border-l1,rgba(255,255,255,.16));border-radius:6px;background:rgba(255,255,255,.06);color:var(--dsw-alias-label-primary,#eef0f4);font-size:12px;padding:2px 6px;outline:none;cursor:pointer}
+.shq-palette-btn{width:100%;margin-top:10px}
+.shq-edit-foot{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:12px}
 `))
 
     // One quote row; `name` is already resolved (alias > builtin > Yahoo).
@@ -255,11 +356,13 @@ return {
       const [syms, setSyms] = React.useState(readSyms)
       const [draft, setDraft] = React.useState('')
       const [paletteName, setPaletteName] = React.useState(readPalette)
+      const [lang, setLang] = React.useState(readLang)
       const drag = React.useRef(null)
       const posRef = React.useRef(null)
       const tzsRef = React.useRef([])
       posRef.current = pos
       const palette = PALETTES[paletteName] || PALETTES.jp
+      const t = T[lang] || T.en
 
       const commitSyms = (next) => {
         const out = []
@@ -294,15 +397,16 @@ return {
       const codesKey = syms.map((e) => e.code).join(',')
 
       // Polling scheduler: fetch one snapshot immediately (window creation or
-      // watchlist change), then poll every ACTIVE_POLL_MS while any watched
-      // market is in its local trading window; while all are closed, stop
-      // polling and only re-check at IDLE_CHECK_MS, resuming 5s polls the
+      // watchlist/language change), then poll every ACTIVE_POLL_MS while any
+      // watched market is in its local trading window; while all are closed,
+      // stop polling and only re-check at IDLE_CHECK_MS, resuming 5s polls the
       // moment some market opens (checked every 60s at most).
       React.useEffect(() => {
         let alive = true
         let busy = false
         let timer = null
         const codes = syms.map((e) => e.code)
+        const texts = T[lang] || T.en
         tzsRef.current = [] // unknown until first success -> conservative active
         const load = async () => {
           if (busy) return
@@ -318,7 +422,7 @@ return {
                 if (it && it.timezone && !seen.includes(it.timezone)) seen.push(it.timezone)
               }
               if (seen.length) tzsRef.current = seen
-            } else setErr((data && data.error) || '获取失败')
+            } else setErr((data && data.error) || texts.fetchFail)
           } catch (e) {
             if (alive) setErr(String((e && e.message) || e))
           } finally {
@@ -338,7 +442,7 @@ return {
           alive = false
           if (timer) timer()
         }
-      }, [codesKey])
+      }, [codesKey, lang])
 
       const onDown = (e) => {
         drag.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y }
@@ -355,20 +459,20 @@ return {
         drag.current = null
       }
 
-      const openEditor = () => {
-        setCollapsed(false)
-        setEditing(true)
-      }
-
       const togglePalette = () => {
         const next = paletteName === 'us' ? 'jp' : 'us'
         setPaletteName(next)
         writePalette(next)
       }
 
+      const setLanguage = (next) => {
+        setLang(next)
+        writeLang(next)
+      }
+
       const labelFor = (code) => {
         const entry = syms.find((e) => e.code === code)
-        return (entry && entry.name) || DISPLAY[code] || ''
+        return (entry && entry.name) || shortNameFor(code, lang) || ''
       }
 
       let body = null
@@ -379,13 +483,13 @@ return {
             React.createElement('input', {
               className: 'shq-edit-name',
               value: e.name || '',
-              placeholder: DISPLAY[e.code] || '显示名（可选）',
+              placeholder: shortNameFor(e.code, lang) || t.namePh,
               spellCheck: false,
               onChange: (ev) => renameAt(idx, ev.target.value),
             }),
             React.createElement('button', {
               className: 'shq-edit-remove',
-              title: '移除',
+              title: t.remove,
               disabled: syms.length <= 1,
               onClick: () => {
                 if (syms.length <= 1) return
@@ -401,31 +505,39 @@ return {
               React.createElement('input', {
                 className: 'shq-edit-input',
                 value: draft,
-                placeholder: '股票代码，如 9984.T',
+                placeholder: t.codePh,
                 spellCheck: false,
                 onChange: (ev) => setDraft(ev.target.value),
                 onKeyDown: (ev) => { if (ev.key === 'Enter') addDraft() },
               }),
-              React.createElement('button', { className: 'shq-edit-btn', onClick: addDraft }, '添加')
+              React.createElement('button', { className: 'shq-edit-btn', onClick: addDraft }, t.add)
             ),
             React.createElement('div', { className: 'shq-edit-hint' },
-              React.createElement('div', null, '4 位简码仅日股，自动补 .T'),
-              React.createElement('div', null, '其它市场请输完整代码，如 AAPL / 0700.HK')
+              React.createElement('div', null, t.hint1),
+              React.createElement('div', null, t.hint2)
+            ),
+            React.createElement('div', { className: 'shq-pref-row' },
+              React.createElement('label', { className: 'shq-pref-label', htmlFor: 'dsh-ticker-jp-lang' }, t.langLabel),
+              React.createElement('select', {
+                id: 'dsh-ticker-jp-lang',
+                className: 'shq-lang',
+                value: lang,
+                onChange: (ev) => setLanguage(ev.target.value),
+              }, LANG_KEYS.map((k) => React.createElement('option', { key: k, value: k }, LANG_LABELS[k])))
             ),
             React.createElement('button', {
-              className: 'shq-edit-btn',
-              style: { width: '100%', marginTop: '6px' },
+              className: 'shq-edit-btn shq-palette-btn',
               onClick: togglePalette,
-            }, '涨跌配色：' + (paletteName === 'us' ? '绿涨红跌（美式）' : '红涨绿跌（日式）')),
+            }, t.paletteLabel + (paletteName === 'us' ? t.paletteUs : t.paletteJp)),
             React.createElement('div', { className: 'shq-edit-foot' },
               React.createElement('button', {
                 className: 'shq-edit-btn',
                 onClick: () => commitSyms(DEFAULTS),
-              }, '恢复默认'),
+              }, t.restore),
               React.createElement('button', {
                 className: 'shq-edit-btn',
                 onClick: () => setEditing(false),
-              }, '完成')
+              }, t.done)
             )
           )
         } else if (items && items.length) {
@@ -434,12 +546,37 @@ return {
           )
         } else {
           body = React.createElement('div', { className: 'shq-body' },
-            React.createElement('div', { className: 'shq-err' }, err || '加载中…')
+            React.createElement('div', { className: 'shq-err' }, err || t.loading)
           )
         }
       }
 
-      return React.createElement('div', { className: 'shq-widget', style: { left: pos.x + 'px', top: pos.y + 'px' } },
+      const widgetClass = collapsed ? 'shq-widget shq-collapsed' : 'shq-widget'
+      let title
+      if (collapsed) {
+        title = React.createElement('span', { className: 'shq-title shq-icon', 'aria-hidden': true }, '📈')
+      } else {
+        title = React.createElement('span', { className: 'shq-title' }, editing ? t.titleEdit : t.title)
+      }
+      const tools = []
+      if (!collapsed) {
+        tools.push(React.createElement('button', {
+          key: 'settings',
+          className: 'shq-tool',
+          title: t.settings,
+          onPointerDown: (e) => e.stopPropagation(),
+          onClick: () => setEditing((v) => !v),
+        }, '⚙'))
+      }
+      tools.push(React.createElement('button', {
+        key: 'collapse',
+        className: 'shq-tool',
+        title: collapsed ? t.expand : t.collapse,
+        onPointerDown: (e) => e.stopPropagation(),
+        onClick: () => setCollapsed((v) => !v),
+      }, collapsed ? '+' : '—'))
+
+      return React.createElement('div', { className: widgetClass, style: { left: pos.x + 'px', top: pos.y + 'px' } },
         React.createElement('div', {
           className: 'shq-head',
           onPointerDown: onDown,
@@ -447,24 +584,8 @@ return {
           onPointerUp: onUp,
           onPointerCancel: onUp,
         },
-          React.createElement('span', { className: 'shq-title' }, editing ? '自选行情' : '行情'),
-          React.createElement('span', { className: 'shq-tools' },
-            React.createElement('button', {
-              className: 'shq-tool',
-              title: '自选设置',
-              onPointerDown: (e) => e.stopPropagation(),
-              onClick: () => {
-                if (collapsed) openEditor()
-                else setEditing((v) => !v)
-              },
-            }, '⚙'),
-            React.createElement('button', {
-              className: 'shq-tool',
-              title: collapsed ? '展开' : '收起',
-              onPointerDown: (e) => e.stopPropagation(),
-              onClick: () => setCollapsed((v) => !v),
-            }, collapsed ? '+' : '—')
-          )
+          title,
+          React.createElement('span', { className: 'shq-tools' }, tools)
         ),
         body
       )

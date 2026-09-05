@@ -18,6 +18,23 @@ const NEGATIVE_FAIL_THRESHOLD = 2
 const NEGATIVE_COOLDOWN_MS = 5 * 60 * 1000
 const cooling = new Map() // symbol -> { fails, until }
 
+// --- Copy & wire strings ---------------------------------------------------
+// Error copy and the Yahoo URL template are shared semantic constants: keep the
+// VALUES identical to lib/index.js (the two host halves only diverge in how
+// they fetch, never in these strings or the RPC contract).
+const MSG_TIMEOUT = 'fetch timed out after 5s'
+const MSG_NO_QUOTES = 'no quotes fetched'
+const MSG_NO_META = 'no meta in response'
+const MSG_NO_PRICE = 'no price/change data'
+const MSG_NO_WEB_RESPONSE = 'no valid web response'
+const MSG_WEB_UNAVAILABLE = 'web service unavailable'
+const MSG_JOIN = '; '
+const MSG_SKIPPED = (symbol) => `[${symbol}] temporarily skipped (repeated timeouts)`
+const MSG_FAILED = (symbol, reason) => `[${symbol}] ${reason}`
+const MSG_HTTP = (status) => `HTTP ${status}`
+const QUOTES_URL = (symbol) =>
+  `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`
+
 // Whitelists a symbol; a bare 4-digit code is treated as Japan and expanded to 9984.T.
 function normalizeSymbol(raw) {
   let s = String(raw == null ? '' : raw).trim().toUpperCase()
@@ -69,11 +86,11 @@ function recordResult(symbol, timedOut, ok, now) {
 async function fetchOne(symbol, web, ctx) {
   const now = Date.now()
   if (isCooling(symbol, now)) {
-    return { ok: false, error: `[${symbol}] temporarily skipped (repeated timeouts)` }
+    return { ok: false, error: MSG_SKIPPED(symbol) }
   }
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`
+  const url = QUOTES_URL(symbol)
   try {
-    const timeoutError = new Error('fetch timed out after 5s')
+    const timeoutError = new Error(MSG_TIMEOUT)
     timeoutError.name = 'TimeoutError'
     const result = await Promise.race([
       web.fetch({ url }).then(
@@ -87,14 +104,14 @@ async function fetchOne(symbol, web, ctx) {
     ])
     if (!result.ok) throw result.error
     const res = result.value
-    if (!res || typeof res.statusCode !== 'number') throw new Error('no valid web response')
-    if (res.statusCode < 200 || res.statusCode >= 300) throw new Error(`HTTP ${res.statusCode}`)
+    if (!res || typeof res.statusCode !== 'number') throw new Error(MSG_NO_WEB_RESPONSE)
+    if (res.statusCode < 200 || res.statusCode >= 300) throw new Error(MSG_HTTP(res.statusCode))
     const data = JSON.parse((res.body && res.body.content) || '')
     const meta = data?.chart?.result?.[0]?.meta
-    if (!meta) throw new Error('no meta in response')
+    if (!meta) throw new Error(MSG_NO_META)
     const price = meta.regularMarketPrice
     const changePct = meta.regularMarketChangePercent
-    if (price == null || changePct == null) throw new Error('no price/change data')
+    if (price == null || changePct == null) throw new Error(MSG_NO_PRICE)
     const name = meta.longName || meta.shortName || symbol
     const item = { name, code: symbol, price, changePct }
     if (meta.exchangeTimezoneName) item.timezone = meta.exchangeTimezoneName
@@ -105,9 +122,9 @@ async function fetchOne(symbol, web, ctx) {
     const timedOut = !!(e && e.name === 'TimeoutError')
     recordResult(symbol, timedOut, false, now)
     const reason = timedOut
-      ? 'fetch timed out after 5s'
+      ? MSG_TIMEOUT
       : String((e && e.message) || e)
-    return { ok: false, error: `[${symbol}] ${reason}` }
+    return { ok: false, error: MSG_FAILED(symbol, reason) }
   }
 }
 
@@ -140,11 +157,11 @@ return {
     ctx.effect(() =>
       harness.handle('getQuotes', async (args) => {
         const web = ctx.get('web')
-        if (web === undefined) return { ok: false, error: 'web service unavailable' }
+        if (web === undefined) return { ok: false, error: MSG_WEB_UNAVAILABLE }
         const symbols = collectSyms(args)
         const { items, errors } = await fetchQuotes(symbols, web, ctx)
         if (items.length === 0) {
-          const errorMsg = errors.length ? errors.join('; ') : 'no quotes fetched'
+          const errorMsg = errors.length ? errors.join(MSG_JOIN) : MSG_NO_QUOTES
           return { ok: false, error: errorMsg }
         }
         return { ok: true, items }

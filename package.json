@@ -1,6 +1,6 @@
 {
   "name": "dsh-ticker-jp",
-  "version": "0.5.2",
+  "version": "1.0.0",
   "description": "A floating, semi-transparent market ticker for DeepSeek Harness: real-time TOPIX ETF / 日経225 quotes.",
   "license": "MIT",
   "keywords": [

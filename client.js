@@ -414,9 +414,10 @@ function anyMarketOpen(tzs, date = new Date()) {
 }
 
 // --- Formatting ---------------------------------------------------------
+const DASH = '--' // fallback shown when a value is unavailable (not localizable)
 const fmt = (n) => {
   const raw = Number(n)
-  if (n == null || !Number.isFinite(raw)) return '--'
+  if (n == null || !Number.isFinite(raw)) return DASH
   const v = Math.abs(raw) < 0.005 ? 0 : raw // avoid "-0.00" for near-zero drops
   return v.toFixed(2)
 }
@@ -480,7 +481,7 @@ return {
       const c = (item && typeof item.changePct === 'number')
         ? (item.changePct > 0 ? up : item.changePct < 0 ? down : NEUTRAL)
         : NEUTRAL
-      const label = name || (item && item.name) || '--'
+      const label = name || (item && item.name) || DASH
       return React.createElement('div', { className: 'shq-row', key: item.code },
         React.createElement('span', { className: 'shq-name', title: item.name }, label),
         React.createElement('span', { className: 'shq-price', style: { color: c } }, fmt(item.price)),

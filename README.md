@@ -2,11 +2,9 @@
 
 **简体中文** · [English](./README.en.md)
 
-<p align="center">
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563eb?style=flat-square" alt="MIT License"></a>
-  <img src="https://img.shields.io/badge/topic-dsh--plugin-7c3aed?style=flat-square" alt="dsh-plugin">
-  <img src="https://img.shields.io/badge/market-Japan-00c48c?style=flat-square" alt="Japan market">
-</p>
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![npm version](https://img.shields.io/npm/v/dsh-ticker-jp)](https://www.npmjs.com/package/dsh-ticker-jp)
+[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
 右上角的悬浮行情小窗，展示 TOPIX 联动 ETF 与日经225，可自选任意 Yahoo 代码。由 [dsh-stock-ticker](https://github.com/FeiZhuNiU-INFJA/dsh-stock-ticker) 改版而来，浮窗交互保留自上游，数据源换成 Yahoo Finance 以支持日股。
 

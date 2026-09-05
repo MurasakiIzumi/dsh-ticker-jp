@@ -6,7 +6,9 @@
 
 ### Changed
 
-- 两版 README 安装节补充 npm 安装方式：`dsh plugin --profile web add dsh-ticker-jp`（npm 预构建安装，免构建授权；GitHub 源码方式保留）。纯文档更新，对外行为不变。
+- 两版 README 安装节补充 npm 安装方式：`dsh plugin --profile web add dsh-ticker-jp`（npm 预构建安装，免构建授权；GitHub 源码方式保留）。
+- 两版 README 顶部徽章更新：新增 awesome-dsh-plugin 收录徽章与 npm 版本/下载量徽章（版本徽章动态显示 npm latest）。
+- 以上均为纯文档更新，对外行为不变。
 
 ## [1.0.0] - 2026-09-05
 

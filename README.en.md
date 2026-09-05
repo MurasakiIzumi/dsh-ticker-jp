@@ -2,11 +2,9 @@
 
 English · [简体中文](./README.md)
 
-<p align="center">
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563eb?style=flat-square" alt="MIT License"></a>
-  <img src="https://img.shields.io/badge/topic-dsh--plugin-7c3aed?style=flat-square" alt="dsh-plugin">
-  <img src="https://img.shields.io/badge/market-Japan-00c48c?style=flat-square" alt="Japan market">
-</p>
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![npm version](https://img.shields.io/npm/v/dsh-ticker-jp)](https://www.npmjs.com/package/dsh-ticker-jp)
+[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
 A small floating ticker for the top-right corner of DeepSeek Harness. It shows the TOPIX-linked ETF and the Nikkei 225, and you can watch any Yahoo symbol with a custom display name. Forked from [dsh-stock-ticker](https://github.com/FeiZhuNiU-INFJA/dsh-stock-ticker): the floating-window interaction comes from upstream, while the data source was switched to Yahoo Finance to cover Japanese markets.
 

@@ -19,6 +19,7 @@ const STORAGE_KEY = 'dsh-ticker-jp:syms'
 const POS_KEY = 'dsh-ticker-jp:pos'
 const PALETTE_KEY = 'dsh-ticker-jp:palette'
 const LANG_KEY = 'dsh-ticker-jp:lang'
+const COLLAPSED_KEY = 'dsh-ticker-jp:collapsed'
 
 const DEFAULTS = ['1306.T', '^N225']
 
@@ -387,6 +388,24 @@ function writePalette(name) {
   } catch (e) { /* ignore quota / privacy errors */ }
 }
 
+// --- Collapsed state (default expanded) --------------------------------
+function readCollapsed() {
+  let value = null
+  if (canStore()) {
+    try {
+      value = localStorage.getItem(COLLAPSED_KEY)
+    } catch (e) { value = null }
+  }
+  return value === 'true' // absent / invalid -> false (expanded)
+}
+
+function writeCollapsed(value) {
+  if (!canStore()) return
+  try {
+    localStorage.setItem(COLLAPSED_KEY, value ? 'true' : 'false')
+  } catch (e) { /* ignore quota / privacy errors */ }
+}
+
 // --- Market hours -------------------------------------------------------
 function zoneNow(tz, date) {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -493,7 +512,7 @@ return {
       const [items, setItems] = React.useState(null)
       const [err, setErr] = React.useState(null)
       const [pos, setPos] = React.useState(readPos)
-      const [collapsed, setCollapsed] = React.useState(false)
+      const [collapsed, setCollapsed] = React.useState(readCollapsed)
       const [editing, setEditing] = React.useState(false)
       const [syms, setSyms] = React.useState(readSyms)
       const [draft, setDraft] = React.useState('')
@@ -748,7 +767,11 @@ return {
         className: 'shq-tool',
         title: collapsed ? t.expand : t.collapse,
         onPointerDown: (e) => e.stopPropagation(),
-        onClick: () => setCollapsed((v) => !v),
+        onClick: () => setCollapsed((v) => {
+          const next = !v
+          writeCollapsed(next)
+          return next
+        }),
       }, collapsed ? '+' : '−'))
 
       return React.createElement('div', { className: widgetClass, style: { right: pos.x + 'px', top: pos.y + 'px' } },

@@ -24,7 +24,7 @@ A small floating ticker for the top-right corner of DeepSeek Harness. It shows t
 - Smart polling: when every watched market is closed, it checks once a minute instead of every 5 seconds
 - Up/down colors switchable between Japanese and US conventions
 - 16 UI languages, auto-detected from the browser on first run, changeable any time
-- Window position, watchlist, palette and language all persist locally
+- Window position, collapsed state, watchlist, palette and language all persist locally
 - One-click restore to defaults
 
 ### Default symbols

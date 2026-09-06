@@ -2,6 +2,12 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [1.0.2] - 2026-09-06
+
+### Added
+
+- 收起/展开状态持久化：切换时写入 localStorage（`dsh-ticker-jp:collapsed`），刷新页面或重启 DSH 后恢复上次状态；首次安装无记录时默认展开。
+
 ## [1.0.1] - 2026-09-05
 
 ### Changed

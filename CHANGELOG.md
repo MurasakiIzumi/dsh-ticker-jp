@@ -2,6 +2,15 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [1.0.3] - 2026-09-07
+
+### Changed
+
+- README 布局调整：英文版升为主文档（`README.md`），原中文版移至 `README.zh-CN.md` 并新增日文版 `README.ja.md`，三版顶部互相链接；删除原 `README.en.md`。
+- 介绍文案改为「全球股市」定位：中英文版明确支持全球市场（日股 `.T`、美股、港股 `.HK`、A 股 `.SS/.SZ` 等 Yahoo 全代码）；日文版以日股为主、同时强调支持全球市场。
+- package.json `description` 改为纯英文：`Global stock ticker plugin for deepseek-harness. Supports worldwide markets (Yahoo Finance) & 16 languages.`；`keywords` 扩展为全球市场 + 日股混合词（新增 stock-ticker / finance / yahoo-finance / global-markets / topix / us-stocks / hong-kong-stocks / watchlist）。
+- 以上均为文档与发布元数据更新，对外行为不变。
+
 ## [1.0.2] - 2026-09-06
 
 ### Added

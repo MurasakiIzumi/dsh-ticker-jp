@@ -36,6 +36,15 @@ A small floating stock ticker for the top-right corner of DeepSeek Harness. It s
 | TOPIX ETF | `1306.T` | Yahoo no longer serves the TOPIX index, so its linked ETF is used instead |
 | 日経225   | `^N225`  | The Nikkei 225 index                                                      |
 
+## 📋 Requirements
+
+| Item    | Requirement                                    |
+| ------- | ---------------------------------------------- |
+| DSH     | `>=0.1.0-rc.7 <0.2.0` (verified on `0.1.7-rc.2`) |
+| Node.js | `^22.19.0` or `>=24.0.0`                       |
+
+Declared through `engines.dsh` and the `@deepseek-ai/dsh-client-ui-slots` peer dependency; no other DSH-side packages are required.
+
 ## 🚀 Install
 
 Install from npm (prebuilt, no build approval needed), or straight from the GitHub source:

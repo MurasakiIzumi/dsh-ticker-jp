@@ -2,6 +2,26 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [1.0.4] - 2026-09-26
+
+### Changed
+
+- `peerDependencies` 中的 `@deepseek-ai/dsh-client-ui-slots` 由 `^0.1.0-rc.7` 改为显式区间 `>=0.1.0-rc.7 <0.2.0`。原写法能在 0.1.7-rc.2 上通过，靠的是 DSH 自身的非标准判定（`dsh-app-boot/lib/index.js` 用 `semver.satisfies(..., { includePrerelease: true })`）；按标准 semver 语义 `^0.1.0-rc.7` 并不包含 `0.1.7-rc.2`，会在 pnpm/npm 侧产生 unmet peer 噪音，dshmarket 的自研解析器还会把 `^0.1.x` 的上界取成 `0.1.1-0` 并给出 aboveMax 软警告。新写法同时表达「0.1.x 全线」的意图，与 `dsh-alive` 的 `>=0.1.0-rc.6 <0.2.0` 一致。
+- 补充 `engines.dsh = ">=0.1.0-rc.7 <0.2.0"`。DSH 自身的兼容性检查只读 peer 声明（不用 `engines.dsh`），该字段供 dshmarket 等读取方展示「宿主要求」。
+- 补充 `dsh.manifestVersion: 1`。
+- 三版 README 新增「环境要求 / Requirements / 動作環境」小节，声明支持的 DSH 与 Node.js 版本。
+
+### Removed
+
+- `peerDependencies` 中的 `@deepseek-ai/dsh-shell`：fork 残留的冗余声明，四个代码文件（`lib/index.js`、`lib/client.js`、`host.js`、`client.js`）中均无任何 import。
+
+### Verified
+
+- 在 DSH **0.1.7-rc.2** 下实测核查通过：`dsh --dump-config --profile web` 退出码 0，组合中包含 `- id: ticker-jp / name: dsh-ticker-jp`，无 deny / incompatible / skipped 记录。
+- 0.1.7 的三项破坏性变更本插件均未触碰：session format v4 的 `source.kind` 限制、settings 服务移除 `register()`、typert strict codec 要求 `create()` 工厂。
+- 运行时契约逐项比对一致：`ctx.webServer.register({ kind, path, handler })`（`exact` / `prefix`）、`shell.overlay` seat 与 `ctx.slots.inject/register({ name, id }, factory)`、客户端 `window.__ModuleLoader__.load({ id, factory })` 加载协议、`dsh.client` 的 `platform` / `inject` / `immediately` 字段、bundle patch 的 `insert` 方言。
+- 本次为纯元数据与文档改动：四个代码文件未改动，对外行为与 RPC 契约完全不变。
+
 ## [1.0.3] - 2026-09-07
 
 ### Changed

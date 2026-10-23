@@ -2,6 +2,24 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [1.0.5] - 2026-10-24
+
+### Fixed
+
+- 适配 DSH 0.2.x。0.2.1-rc.2 起，DSH 会按 `engines.dsh` 拒绝版本不符的插件，1.0.4 因此在桌面版里没被加载，`/dsh-ticker-jp/quotes` 一直返回 404。
+
+### Changed
+
+- `engines.dsh` 由 `>=0.1.0-rc.7 <0.2.0` 放宽到 `>=0.1.0-rc.7 <0.3.0`，`@deepseek-ai/dsh-client-ui-slots` 的 peer 区间同步放宽。
+- 更正 1.0.4 里的一条结论：那时 DSH 的兼容性检查只看 peer 声明，0.2.x 改成先看 `engines.dsh`，现在这个字段是真正的闸门。
+- npm 包里补上 `README.zh-CN.md` 和 `README.ja.md`。之前 `files` 只有 `README.md`，中文和日文的切换链接在 npm 页面上是断的。
+- 三版 README 更新版本要求，并把开头介绍、安装说明、数据源几处板正的句子改顺。
+
+### Verified
+
+- 在 0.2.1-rc.2 上核对了插件用到的接口：`ctx.webServer.register({ kind, path, handler })`、`shell.overlay` 槽位和 `ctx.slots.inject/register`、`window.__ModuleLoader__.load` 的加载协议、`dsh.client` 的 `platform`/`inject`/`immediately`、`--dsw-alias-*` 主题变量。这些在 0.1.x 和 0.2.x 上没有变化，四个代码文件未改动。
+- Host 半区用桩 ctx 在 Node 24 上跑通：路由注册、`9984` 补成 `9984.T`、Yahoo 取数、返回 JSON 都正常。
+
 ## [1.0.4] - 2026-09-26
 
 ### Changed

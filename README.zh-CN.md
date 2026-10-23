@@ -8,7 +8,7 @@
 [![dsh.so risk](https://www.dsh.so/badge/dsh-ticker-jp.svg)](https://www.dsh.so/artifact/dsh-ticker-jp/)
 [![dsh.so install](https://www.dsh.so/badge/install/dsh-ticker-jp.svg)](https://www.dsh.so/artifact/dsh-ticker-jp/)
 
-右上角的悬浮行情小窗，展示 TOPIX 联动 ETF 与日经225，并支持**全球股市**：可自选任意 Yahoo 代码，日股（`.T`）、美股、港股（`.HK`）、A 股（`.SS`/`.SZ`）等全球主要市场均可实时报价。由 [dsh-stock-ticker](https://github.com/FeiZhuNiU-INFJA/dsh-stock-ticker) 改版而来，浮窗交互保留自上游，数据源换成 Yahoo Finance 以覆盖全球市场。
+页面右上角挂着一个悬浮行情小窗，默认显示 TOPIX 联动 ETF（`1306.T`）和日经225（`^N225`）。想看别的市场自己加：日股填 4 位代码，美股、港股（`.HK`）、A 股（`.SS`/`.SZ`）填完整代码，Yahoo 能查到的都能加。浮窗交互沿用上游 [dsh-stock-ticker](https://github.com/FeiZhuNiU-INFJA/dsh-stock-ticker)，数据源换成了 Yahoo Finance。
 
 ## 📸 预览
 
@@ -20,14 +20,14 @@
 
 ## ✨ 功能
 
-- 浮窗可拖拽、可收起，背景跟随 DSH 主题色
-- 每行显示名称、价格、涨跌幅，红涨绿跌
-- 自选全球股市代码（日股 `.T`、美股、港股 `.HK`、A 股 `.SS`/`.SZ`…），支持 4 位简码与 `代码:显示名` 别名
-- 休市自动降频：全部自选市场休市时改为每分钟检查，开盘恢复 5 秒刷新
-- 涨跌配色可在日式/美式间切换
-- 16 种界面语言，首次按浏览器语言匹配，随时可换
-- 窗口位置、收起状态、自选列表、配色、语言均保存在本地
-- 一键恢复默认
+- 浮窗能拖动、能收起，配色跟着 DSH 主题走
+- 一行一个标的，显示名称、价格、涨跌幅；默认红涨绿跌
+- 自选不限日本：日股 `.T`、美股、港股 `.HK`、A 股 `.SS`/`.SZ` 等都能加。4 位纯数字自动补 `.T`，也可以用 `代码:显示名` 起别名
+- 全部自选市场休市时，刷新降到每分钟一次；开市时是 5 秒一次
+- 涨跌配色可以在日式和美式之间切换
+- 界面支持 16 种语言，第一次按浏览器语言选，之后随时改
+- 窗口位置、收起状态、自选列表、配色、语言都保存在本地
+- 点「恢复默认」回到初始的两只标的
 
 ### 默认标的
 
@@ -38,16 +38,16 @@
 
 ## 📋 环境要求
 
-| 项目    | 要求                                            |
-| ------- | ----------------------------------------------- |
-| DSH     | `>=0.1.0-rc.7 <0.2.0`（已在 `0.1.7-rc.2` 实测） |
-| Node.js | `^22.19.0` 或 `>=24.0.0`                         |
+| 项目    | 要求                                                       |
+| ------- | ---------------------------------------------------------- |
+| DSH     | `>=0.1.0-rc.7 <0.3.0`（`0.1.7-rc.2`、`0.2.1-rc.2` 核对过） |
+| Node.js | `^22.19.0` 或 `>=24.0.0`                                   |
 
-通过 `engines.dsh` 与 `@deepseek-ai/dsh-client-ui-slots` 这条 peer 依赖声明，不依赖其他 DSH 侧官方包。
+DSH 启动时会读 `engines.dsh`，用它判断这个插件能不能加载，版本区间就写在那里。`@deepseek-ai/dsh-client-ui-slots` 只作为 peer 依赖声明，不需要单独安装；除此之外不依赖 DSH 的其他官方包。
 
 ## 🚀 安装
 
-从 npm 安装（预构建、免构建授权），或直接从 GitHub 源码安装：
+npm 上的版本是预构建的，装的时候不用给构建授权；也可以直接从 GitHub 源码装。
 
 ```bash
 # npm（推荐）
@@ -57,15 +57,15 @@ dsh plugin --profile web add dsh-ticker-jp
 dsh plugin --profile web add github:MurasakiIzumi/dsh-ticker-jp
 ```
 
-装完重启 DSH（或选「立即重启」），窗口出现在页面右上角。
+装完重启 DSH（或点「立即重启」），窗口就出现在页面右上角。
 
 ## ⚙️ 使用
 
-1. 点标题栏 **⚙** 进入设置。
-2. 每行是代码 + 显示名 + 移除按钮。直接改显示名即生效；留空则按默认简称 → Yahoo 名 → 代码回退。
-3. 底部输入框添加标的，可填 `9984.T`、`AAPL`、`9984`（4 位纯数字只对日股补 `.T`）或带别名的 `9984.T:软银`。
-4. 配色与语言在面板中部切换，即时生效。
-5. 「恢复默认」回到 TOPIX ETF 与日経225，「完成」退出。
+1. 点标题栏的 **⚙** 打开设置。
+2. 每行是代码、显示名和移除按钮。显示名改完立刻生效；留空就依次用默认简称、Yahoo 的名称、代码。
+3. 底部输入框加标的：`9984.T`、`AAPL`、`9984`（4 位纯数字只对日股补 `.T`）；写成 `9984.T:软银` 可以带别名。
+4. 配色和语言在面板中间，改完立刻生效。
+5. 「恢复默认」回到初始的两只，「完成」关掉面板。
 
 ## 🗂️ 代码结构
 
@@ -87,28 +87,28 @@ dsh-ticker-jp/
 └── README.ja.md       # 日本語
 ```
 
-同一份代码有两种形态：`lib/` 是随 DSH 常驻的 bundle 入口；`host.js` / `client.js` 是动态插件形态，临时体验用，功能等价。
+同一份代码有两种形态：`lib/` 是随 DSH 常驻的 bundle 入口；`host.js` / `client.js` 是动态插件形态，临时体验用，功能一样。
 
 ## 🔌 数据源
 
 - Yahoo Finance chart API：`https://query1.finance.yahoo.com/v8/finance/chart/{代码}?interval=1d&range=1d`
-- 免费、无需鉴权。价格取 `meta.regularMarketPrice`，涨跌幅取 `meta.regularMarketChangePercent`，名称取 `longName/shortName`
-- 覆盖全球主要市场：日股 `.T`、美股、港股 `.HK`、A 股 `.SS/.SZ` 均可
-- 抓取时回传交易所时区与交易所名，客户端据此判断当地交易时段
-- 名称不内置，以 Yahoo 返回为准；默认两只的简称只在展示层覆盖
+- 免费、不用鉴权。价格取 `meta.regularMarketPrice`，涨跌幅取 `meta.regularMarketChangePercent`，名称取 `longName`/`shortName`
+- 日股 `.T`、美股、港股 `.HK`、A 股 `.SS`/`.SZ`，这些市场都能看
+- 返回里带着交易所时区和交易所名，客户端拿它判断当地在不在交易时段
+- 名称不自己维护，用 Yahoo 返回的；只有默认那两只会换成本地简称显示
 
 ## 🧪 动态插件（可选）
 
-不落盘、临时载入，适合快速体验：
+不装也能先看看效果：
 
-1. 用 `cordis_define` 创建插件：`code.host` 填 [host.js](./host.js) 全文，`code.client` 填 [client.js](./client.js) 全文。
-2. `cordis_run` 激活，客户端首次运行在审批卡片点「允许」。
-3. 刷新页面即出现悬浮窗。
+1. 用 `cordis_define` 建插件，`code.host` 贴 [host.js](./host.js)，`code.client` 贴 [client.js](./client.js)。
+2. `cordis_run` 激活，客户端第一次运行会弹审批，点「允许」。
+3. 刷新页面，浮窗就出来了。
 
-动态形态与 bundle 功能一致，差别只在 Host 抓取方式：动态形态运行在受限沙箱，经 `ctx.web` 抓取；bundle 用原生 `fetch`。两者的 RPC 契约相同。
+动态形态和 bundle 用起来一样，只有 Host 取数的方式不同：动态形态跑在受限沙箱里，走 `ctx.web`；bundle 直接用原生 `fetch`。两边的 RPC 契约相同。
 
 ## 📄 License
 
 [MIT](./LICENSE)
 
-悬浮窗实现与结构源自 [FeiZhuNiU-INFJA](https://github.com/FeiZhuNiU-INFJA) 的 [dsh-stock-ticker](https://github.com/FeiZhuNiU-INFJA/dsh-stock-ticker)（Copyright (c) 2026 Yulin），本改版修改数据源、扩展自选功能并将覆盖范围扩展至全球市场（Copyright (c) 2026 XuZhichao）。
+浮窗实现与结构来自 [FeiZhuNiU-INFJA](https://github.com/FeiZhuNiU-INFJA) 的 [dsh-stock-ticker](https://github.com/FeiZhuNiU-INFJA/dsh-stock-ticker)（Copyright (c) 2026 Yulin）。本改版换了数据源，加了自选，把覆盖范围扩到了全球市场（Copyright (c) 2026 XuZhichao）。

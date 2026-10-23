@@ -8,7 +8,7 @@ English · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md)
 [![dsh.so risk](https://www.dsh.so/badge/dsh-ticker-jp.svg)](https://www.dsh.so/artifact/dsh-ticker-jp/)
 [![dsh.so install](https://www.dsh.so/badge/install/dsh-ticker-jp.svg)](https://www.dsh.so/artifact/dsh-ticker-jp/)
 
-A small floating stock ticker for the top-right corner of DeepSeek Harness. It supports **worldwide markets** via Yahoo Finance — Japanese stocks (`.T`), US stocks, Hong Kong (`.HK`), mainland China (`.SS`/`.SZ`) and any other symbol Yahoo serves — with real-time quotes, a customizable watchlist and display-name aliases. Out of the box it shows the TOPIX-linked ETF and the Nikkei 225. Forked from [dsh-stock-ticker](https://github.com/FeiZhuNiU-INFJA/dsh-stock-ticker): the floating-window interaction comes from upstream, while the data source was switched to Yahoo Finance to cover markets around the globe.
+A draggable stock ticker that sits in the top-right corner of DeepSeek Harness. It starts with the TOPIX-linked ETF (`1306.T`) and the Nikkei 225 (`^N225`). Add anything else Yahoo Finance serves: Japanese (`.T`), US, Hong Kong (`.HK`) and mainland China (`.SS`/`.SZ`) symbols all work. The floating window is from [dsh-stock-ticker](https://github.com/FeiZhuNiU-INFJA/dsh-stock-ticker); this fork only changes where the quotes come from.
 
 ## 📸 Preview
 
@@ -21,13 +21,13 @@ A small floating stock ticker for the top-right corner of DeepSeek Harness. It s
 ## ✨ Features
 
 - Draggable, collapsible window that follows the DSH theme
-- One row per symbol: name, price, change percent; red for up by default
-- Watch symbols from worldwide markets (Japan `.T`, US, Hong Kong `.HK`, mainland China `.SS`/`.SZ`…), with 4-digit shorthand and `code:display name` aliases
-- Smart polling: when every watched market is closed, it checks once a minute instead of every 5 seconds
-- Up/down colors switchable between Japanese and US conventions
-- 16 UI languages, auto-detected from the browser on first run, changeable any time
+- One row per symbol with name, price and change percent; red for up by default
+- Watch any market Yahoo covers, with 4-digit shorthand for Japanese codes and `code:display name` aliases
+- Polling drops to once a minute while every watched market is closed, and runs every 5 seconds otherwise
+- Up/down colours switch between the Japanese and US conventions
+- 16 UI languages, picked from the browser on first run and changeable at any time
 - Window position, collapsed state, watchlist, palette and language all persist locally
-- One-click restore to defaults
+- "Restore default" brings back the original two symbols
 
 ### Default symbols
 
@@ -38,16 +38,16 @@ A small floating stock ticker for the top-right corner of DeepSeek Harness. It s
 
 ## 📋 Requirements
 
-| Item    | Requirement                                    |
-| ------- | ---------------------------------------------- |
-| DSH     | `>=0.1.0-rc.7 <0.2.0` (verified on `0.1.7-rc.2`) |
-| Node.js | `^22.19.0` or `>=24.0.0`                       |
+| Item    | Requirement                                                      |
+| ------- | ---------------------------------------------------------------- |
+| DSH     | `>=0.1.0-rc.7 <0.3.0` (checked on `0.1.7-rc.2` and `0.2.1-rc.2`) |
+| Node.js | `^22.19.0` or `>=24.0.0`                                         |
 
-Declared through `engines.dsh` and the `@deepseek-ai/dsh-client-ui-slots` peer dependency; no other DSH-side packages are required.
+DSH reads `engines.dsh` at startup to decide whether it will load the plugin, so the range lives there. `@deepseek-ai/dsh-client-ui-slots` is declared as a peer only and does not need to be installed. No other DSH-side package is required.
 
 ## 🚀 Install
 
-Install from npm (prebuilt, no build approval needed), or straight from the GitHub source:
+The npm package is prebuilt, so there is no build approval to grant. You can also install straight from the GitHub source.
 
 ```bash
 # npm (recommended)
@@ -57,15 +57,15 @@ dsh plugin --profile web add dsh-ticker-jp
 dsh plugin --profile web add github:MurasakiIzumi/dsh-ticker-jp
 ```
 
-Restart DSH (or choose "restart now") and the widget appears at the top-right of the page.
+Restart DSH (or pick "restart now") and the widget appears in the top-right corner.
 
 ## ⚙️ Usage
 
-1. Click the **⚙** button in the title bar to open settings.
-2. Each row is code + display-name input + remove button. Editing the name applies immediately; leaving it blank falls back to built-in shorthand → Yahoo name → code.
-3. Use the box at the bottom to add symbols: `9984.T`, `AAPL`, or `9984` (a bare 4-digit code gets `.T` appended, Japan only). `9984.T:SoftBank` adds a symbol with an alias.
-4. Palette and language controls sit in the middle of the panel and apply immediately.
-5. "Restore default" returns to TOPIX ETF + Nikkei 225; "Done" closes the panel.
+1. Click **⚙** in the title bar to open the settings.
+2. Each row has a code, a display-name field and a remove button. Name edits apply right away; leave it empty to fall back to the built-in shorthand, then the Yahoo name, then the code.
+3. Add symbols in the box at the bottom: `9984.T`, `AAPL`, or `9984` (a bare 4-digit code gets `.T`, Japan only). `9984.T:SoftBank` adds an alias.
+4. Palette and language sit in the middle of the panel and apply immediately.
+5. "Restore default" brings back the TOPIX ETF and the Nikkei 225; "Done" closes the panel.
 
 ## 🗂️ Code structure
 
@@ -87,28 +87,28 @@ dsh-ticker-jp/
 └── README.ja.md       # 日本語
 ```
 
-The same code ships in two forms: `lib/` is the bundle that stays installed in DSH; `host.js` / `client.js` form the dynamic-plugin variant for temporary runs. They are functionally equivalent.
+The same code ships in two forms: `lib/` is the bundle that stays installed in DSH, while `host.js` / `client.js` form the dynamic-plugin variant for a temporary run. They behave the same.
 
 ## 🔌 Data source
 
 - Yahoo Finance chart API: `https://query1.finance.yahoo.com/v8/finance/chart/{code}?interval=1d&range=1d`
-- Free, no authentication. Price from `meta.regularMarketPrice`, change percent from `meta.regularMarketChangePercent`, name from `longName/shortName`
-- Covers worldwide markets — Japan `.T`, US, Hong Kong `.HK`, mainland China `.SS`/`.SZ` and any other Yahoo-supported exchange
-- Each quote carries the exchange timezone and exchange name so the client can tell when local markets trade
-- Names come from Yahoo, never a built-in table; the two defaults get shorthand names in the display layer only
+- Free and unauthenticated. Price comes from `meta.regularMarketPrice`, change percent from `meta.regularMarketChangePercent`, and the name from `longName`/`shortName`
+- Covers Japan `.T`, the US, Hong Kong `.HK`, mainland China `.SS`/`.SZ` and any other exchange Yahoo serves
+- Each quote carries its exchange timezone and exchange name, so the client can tell when the local market trades
+- Names are not hard-coded; only the two defaults are renamed for display
 
 ## 🧪 Dynamic plugin (optional)
 
-Loads without installing, for a quick trial:
+Try it without installing:
 
-1. Create a plugin with `cordis_define`: paste [host.js](./host.js) as `code.host` and [client.js](./client.js) as `code.client`.
-2. Activate with `cordis_run`; approve the client on first run.
-3. Refresh the page to see the widget.
+1. Create a plugin with `cordis_define`; paste [host.js](./host.js) as `code.host` and [client.js](./client.js) as `code.client`.
+2. Activate it with `cordis_run` and approve the client on first run.
+3. Refresh the page and the widget appears.
 
-The dynamic form behaves like the bundle. The only difference is the Host fetch path: the dynamic Host runs in a restricted sandbox and fetches through `ctx.web`, while the bundle uses native `fetch`. The RPC contract is the same.
+The dynamic form behaves like the bundle. The only difference is how the host fetches: the dynamic host runs in a restricted sandbox and goes through `ctx.web`, while the bundle uses native `fetch`. The RPC contract is the same.
 
 ## 📄 License
 
 [MIT](./LICENSE)
 
-The floating-window implementation and structure come from [FeiZhuNiU-INFJA](https://github.com/FeiZhuNiU-INFJA)'s [dsh-stock-ticker](https://github.com/FeiZhuNiU-INFJA/dsh-stock-ticker) (Copyright (c) 2026 Yulin). This fork replaces the data source, adds the watchlist feature and extends coverage to worldwide markets (Copyright (c) 2026 XuZhichao).
+The floating-window implementation and structure come from [FeiZhuNiU-INFJA](https://github.com/FeiZhuNiU-INFJA)'s [dsh-stock-ticker](https://github.com/FeiZhuNiU-INFJA/dsh-stock-ticker) (Copyright (c) 2026 Yulin). This fork replaces the data source, adds the watchlist and extends coverage to worldwide markets (Copyright (c) 2026 XuZhichao).
